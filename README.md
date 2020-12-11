@@ -1,6 +1,8 @@
-# xi
+# Xi
 
-_xi_ (aka ξ), a search tool for the Unicode Character Database.
+_Xi_ (aka ξ), a search tool for the Unicode Character Database.
+
+![xi](/images/xi.png)
 
 ## Usage Instructions
 
