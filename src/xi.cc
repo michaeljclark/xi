@@ -45,6 +45,7 @@ template <typename K,typename V> using map = std::map<K,V>;
 
 static const char* unicode_data_file = "data/13.0.0/UnicodeData.txt";
 static bool help_text = false;
+static bool debug_enabled = false;
 static bool optimized_search = true;
 vector<string> unicode_search_terms;
 
@@ -231,6 +232,8 @@ static void do_search_brute_force(vector<string> terms)
         }
     }
 
+    if (!debug_enabled) return;
+
     /*
      * print timings
      */
@@ -341,6 +344,8 @@ static void do_search_rabin_karp(vector<string> terms)
         }
     }
 
+    if (!debug_enabled) return;
+
     /*
      * print timings
      */
@@ -372,6 +377,7 @@ void print_help(int argc, char **argv)
         "\n"
         "Options:\n"
         "  -u, --data-file <name>       unicode data file\n"
+        "  -d, --debug                  enable search debug and timings\n"
         "  -x, --brute-force            disable search optimization\n"
         "  -h, --help                   command line help\n",
         argv[0]);
@@ -415,6 +421,9 @@ bool parse_options(int argc, char **argv)
         if (match_option(argv[i], "-u", "--unicode-data")) {
             if (check_param(++i == argc, "--unicode-data")) break;
             unicode_data_file = argv[i++];
+        } else if (match_option(argv[i], "-d", "--debug")) {
+            debug_enabled = true;
+            i++;
         } else if (match_option(argv[i], "-x", "--brute-force")) {
             optimized_search = false;
             i++;
