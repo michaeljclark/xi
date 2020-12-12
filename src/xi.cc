@@ -322,7 +322,7 @@ static void do_search_rabin_karp(vector<string> terms)
                         (e.line,zedland::hashmap<int,int>()));
                 }
                 /* count occurances of each term */
-                si->second[t]++;
+                si->second[(int)t]++;
             }
         }
     }
