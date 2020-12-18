@@ -13,4 +13,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include_directories(src)
-add_executable(xi src/xi.cc)
+add_executable(xi src/xi.cc src/xi_nub.cc)
+
+if (WIN32)
+set_source_files_properties(src/xi.cc src/xi_nub.cc
+	PROPERTIES COMPILE_DEFINITIONS _CRT_SECURE_NO_WARNINGS
+)
+endif ()

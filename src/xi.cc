@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
 #include <cctype>
 
 #include <map>
@@ -32,6 +33,8 @@
 
 #include "utf8.h"
 #include "hashmap.h"
+#include "stdendian.h"
+#include "xi_nub.h"
 
 /*
  * xi (aka ξ), a search tool for the Unicode Character Database.
@@ -46,15 +49,19 @@ template <typename K,typename V> using map = std::map<K,V>;
 
 static const char* unicode_data_file = "data/13.0.0/UnicodeData.txt";
 static bool help_text = false;
+static bool nub_client = false;
+static bool nub_server = false;
 static bool debug_enabled = false;
+static bool timings_enabled = false;
 static bool optimized_search = true;
+vector<string> client_search_terms;
 vector<string> unicode_search_terms;
 
 /*
  * schema for UnicodeData.txt from Unicode Character Database (UCD.zip)
  */
 
-struct data {
+struct unicode_data {
     /*  0 */ uint32_t Code;
     /*  1 */ string Name;
     /*  2 */ string General_Category;
@@ -95,6 +102,18 @@ static vector<string> split(string str, string sep, split_flags flags = none)
     return comps;
 }
 
+static string join(vector<string> comps, string sep, size_t start, size_t end)
+{
+    string str;
+    for (size_t i = start; i != end; i++) {
+        if (i != start) {
+            str.append(sep);
+        }
+        str.append(comps[i]);
+    }
+    return str;
+}
+
 bool parse_codepoint(string str, unsigned long &val)
 {
     char *endptr = nullptr;
@@ -102,10 +121,10 @@ bool parse_codepoint(string str, unsigned long &val)
     return (*endptr == '\0');
 }
 
-vector<data> read_unicode_data()
+vector<unicode_data> read_unicode_data()
 {
     // 0000;<control>;Cc;0;BN;;;;;N;NULL;;;;
-    vector<data> data;
+    vector<unicode_data> data;
     FILE *f;
     char buf[256];
     const char* p;
@@ -152,7 +171,7 @@ struct subhash_ent { int line; int tok; int offset; int len; };
 typedef zedland::hashmap<size_t,vector<subhash_ent>> subhash_map;
 typedef pair<size_t,vector<subhash_ent>> subhash_pair;
 
-static void index_list(subhash_map &index, vector<vector<string>> &tokens)
+static void index_rabin_karp(subhash_map &index, vector<vector<string>> &tokens)
 {
     for (int i = 0; i < (int)tokens.size(); i++) {
         for (int j = 0; j < (int)tokens[i].size(); j++) {
@@ -172,21 +191,10 @@ static void index_list(subhash_map &index, vector<vector<string>> &tokens)
     }
 }
 
-/*
- * unicode data search - using linear scan
- */
-
-static void do_search_brute_force(vector<string> terms)
+static void tokenize_data(vector<unicode_data> &data,
+    vector<vector<string>> &tokens)
 {
-    /*
-     * load data, tokenize and convert to lower case
-     */
-    const auto t1 = high_resolution_clock::now();
-    vector<data> data = read_unicode_data();
-    vector<vector<string>> tokens;
-    size_t byte_count = 0;
     for (size_t i = 0; i < data.size(); i++) {
-        byte_count += data[i].Name.size();
         vector<string> tl = split(data[i].Name.data(), " ");
         for (auto &name : tl) {
             std::transform(name.begin(), name.end(), name.begin(),
@@ -194,19 +202,30 @@ static void do_search_brute_force(vector<string> terms)
         }
         tokens.push_back(tl);
     }
-    const auto t2 = high_resolution_clock::now();
+}
 
-    /*
-     * convert search terms to lower case
-     */
+static void lowercase_terms(vector<string> &terms)
+{
     for (auto &term : terms) {
         std::transform(term.begin(), term.end(), term.begin(),
             [](unsigned char c){ return std::tolower(c); });
     }
+}
+
+/*
+ * unicode data search - using linear scan
+ */
+
+static vector<unicode_data> do_search_brute_force(vector<unicode_data> &data,
+    vector<vector<string>> &tokens, vector<string> terms)
+{
+    lowercase_terms(terms);
 
     /*
      * brute force search all rows for matches
      */
+
+    vector<unicode_data> results;
     for (size_t i = 0; i < data.size(); i++) {
         size_t matches = 0;
         for (auto &term : terms) {
@@ -227,68 +246,60 @@ static void do_search_brute_force(vector<string> terms)
             if (match) matches++;
         }
         if (matches == terms.size()) {
-            char buf[5];
-            utf32_to_utf8(buf, sizeof(buf), data[i].Code);
-            printf("%s\tU+%04x\t%s\n", buf, data[i].Code, data[i].Name.c_str());
+            results.push_back(data[i]);
         }
     }
 
-    if (!debug_enabled) return;
+    return results;
+}
+
+static vector<unicode_data> do_search_brute_force(vector<string> terms)
+{
+    /*
+     * load and tokenize unicode data
+     */
+    const auto t1 = high_resolution_clock::now();
+    vector<vector<string>> tokens;
+    vector<unicode_data> data = read_unicode_data();
+    tokenize_data(data, tokens);
+
+    /*
+     * perform search
+     */
+    const auto t2 = high_resolution_clock::now();
+    vector<unicode_data> results = do_search_brute_force(data, tokens, terms);
+    const auto t3 = high_resolution_clock::now();
 
     /*
      * print timings
      */
-    const auto t3 = high_resolution_clock::now();
-    auto tl = duration_cast<nanoseconds>(t2 - t1).count();
-    auto ts = duration_cast<nanoseconds>(t3 - t2).count();
-    printf("[Brute-Force] load = %.fμs, search = %.fμs, rows = %zu, bytes = %zu\n",
-        tl / 1e3, ts / 1e3, data.size(), byte_count);
+    if (timings_enabled)
+    {
+        auto tl = duration_cast<nanoseconds>(t2 - t1).count();
+        auto ts = duration_cast<nanoseconds>(t3 - t2).count();
+        printf("[Brute-Force] load = %.fμs, search = %.fμs\n",
+               tl / 1e3, ts / 1e3);
+    }
+
+    return results;
 }
 
 /*
  * unicode data search - using rolling hash index
  */
 
-static void do_search_rabin_karp(vector<string> terms)
+static vector<unicode_data> do_search_rabin_karp(vector<unicode_data> &data,
+    vector<vector<string>> &tokens, subhash_map &index, vector<string> terms)
 {
-    /*
-     * load data, tokenize and convert to lower case
-     */
-    const auto t1 = high_resolution_clock::now();
-    vector<data> data = read_unicode_data();
-    vector<vector<string>> tokens;
-    size_t byte_count = 0;
-    for (size_t i = 0; i < data.size(); i++) {
-        byte_count += data[i].Name.size();
-        vector<string> tl = split(data[i].Name.data(), " ");
-        for (auto &name : tl) {
-            std::transform(name.begin(), name.end(), name.begin(),
-                [](unsigned char c){ return std::tolower(c); });
-        }
-        tokens.push_back(tl);
-    }
-
-    /*
-     * create Rabin-Karp substring hash indices
-     */
-    subhash_map index;
-    index_list(index, tokens);
-    const auto t2 = high_resolution_clock::now();
-
-    /*
-     * convert search terms to lower case
-     */
-    for (auto &term : terms) {
-        std::transform(term.begin(), term.end(), term.begin(),
-            [](unsigned char c){ return std::tolower(c); });
-    }
+    lowercase_terms(terms);
 
     /*
      * search the tokenized Rabin-Karp hash table for token matches
      *
      * search result map containing: { row -> { term -> count }
      */
-    map<int,zedland::hashmap<int,int>> results;
+
+    map<int,zedland::hashmap<int,int>> matches;
     for (size_t t = 0; t < terms.size(); t++)
     {
         auto &term = terms[t];
@@ -313,11 +324,11 @@ static void do_search_rabin_karp(vector<string> terms)
             subhash_ent e = ri->second[j];
             string s = tokens[e.line][e.tok].substr(e.offset,e.len);
             is_exact = (e.offset == 0 && e.len == tokens[e.line][e.tok].size());
-            auto si = results.find(e.line);
+            auto si = matches.find(e.line);
             if (!needs_exact || (needs_exact && is_exact)) {
                 /* create { term -> count } map per matched line */
-                if (si == results.end()) {
-                    si = results.insert(results.end(),
+                if (si == matches.end()) {
+                    si = matches.insert(matches.end(),
                         pair<int,zedland::hashmap<int,int>>
                         (e.line,zedland::hashmap<int,int>()));
                 }
@@ -335,26 +346,469 @@ static void do_search_rabin_karp(vector<string> terms)
      * least once but can match in the same column more than once.
      * all terms must be covered.
      */
-    for (auto ri = results.begin(); ri != results.end(); ri++)
+    vector<unicode_data> results;
+    for (auto ri = matches.begin(); ri != matches.end(); ri++)
     {
         int i = ri->first;
         if (ri->second.size() == terms.size()) {
-            char buf[5];
-            utf32_to_utf8(buf, sizeof(buf), data[i].Code);
-            printf("%s\tU+%04x\t%s\n", buf, data[i].Code, data[i].Name.c_str());
+            results.push_back(data[i]);
         }
     }
 
-    if (!debug_enabled) return;
+    return results;
+}
+
+static vector<unicode_data> do_search_rabin_karp(vector<string> terms)
+{
+    /*
+     * load, tokenize and index unicode data
+     */
+    const auto t1 = high_resolution_clock::now();
+    subhash_map index;
+    vector<vector<string>> tokens;
+    vector<unicode_data> data = read_unicode_data();
+    tokenize_data(data, tokens);
+    index_rabin_karp(index, tokens);
+
+    /*
+     * perform search
+     */
+    const auto t2 = high_resolution_clock::now();
+    vector<unicode_data> results = do_search_rabin_karp(data, tokens, index, terms);
+    const auto t3 = high_resolution_clock::now();
 
     /*
      * print timings
      */
-    const auto t3 = high_resolution_clock::now();
-    auto tl = duration_cast<nanoseconds>(t2 - t1).count();
-    auto ts = duration_cast<nanoseconds>(t3 - t2).count();
-    printf("[Rabin-Karp] load = %.fμs, search = %.fμs, rows = %zu, bytes = %zu\n",
-        tl / 1e3, ts / 1e3, data.size(), byte_count);
+    if (timings_enabled)
+    {
+        const auto t3 = high_resolution_clock::now();
+        auto tl = duration_cast<nanoseconds>(t2 - t1).count();
+        auto ts = duration_cast<nanoseconds>(t3 - t2).count();
+        printf("[Rabin-Karp] load = %.fμs, search = %.fμs\n",
+            tl / 1e3, ts / 1e3);
+    }
+
+    return results;
+}
+
+void do_print_results(vector<unicode_data> data)
+{
+    for (size_t i = 0; i < data.size(); i++) {
+        char buf[5];
+        utf32_to_utf8(buf, sizeof(buf), data[i].Code);
+        printf("%s\tU+%04x\t%s\n", buf, data[i].Code, data[i].Name.c_str());
+    }
+}
+
+/*
+ * nub common
+ */
+
+struct mynub_conn
+{
+    enum { buf_size = 32768 };
+
+    struct span { void *data; size_t length; };
+
+    uint8_t buf[buf_size];
+    size_t offset;
+    size_t length;
+
+    template <typename INT, typename SWAP> size_t write_int(INT num, SWAP f);
+    size_t write_int8(int8_t num) { return write_int<int8_t>(num,le8); }
+    size_t write_int16(int16_t num) { return write_int<int16_t>(num,le16); }
+    size_t write_int32(int32_t num) { return write_int<int32_t>(num,le32); }
+    size_t write_int64(int64_t num) { return write_int<int64_t>(num,le64); }
+    size_t write_string(const char *s, size_t len);
+
+    template <typename INT, typename SWAP> size_t read_int(INT *num, SWAP f);
+    size_t read_int8(int8_t *num) { return read_int<int8_t>(num,le8); }
+    size_t read_int16(int16_t *num) { return read_int<int16_t>(num,le16); }
+    size_t read_int32(int32_t *num) { return read_int<int32_t>(num,le32); }
+    size_t read_int64(int64_t *num) { return read_int<int64_t>(num,le64); }
+    size_t read_string(char *s, size_t buf_len, size_t *str_len);
+
+    void reset()
+    {
+        offset = 0;
+        length = sizeof(buf);
+    }
+
+    void copy_input(struct span); /* call inside read callback */
+    struct span copy_output(); /* call before write call */
+    struct span copy_remaining(); /* call before read call */
+};
+
+template <typename INT, typename SWAP> size_t mynub_conn::write_int(INT num, SWAP f)
+{
+    if (offset + sizeof(num) > length) return 0;
+    INT t = f(num);
+    memcpy(&buf[offset], &t, sizeof(INT));
+    if (debug_enabled) {
+        printf("write_int%zu: offset=%zu, value=%lld\n",
+            sizeof(num)<<3, offset, (long long)num);
+    }
+    offset += sizeof(num);
+    return sizeof(num);
+}
+
+size_t mynub_conn::write_string(const char *s, size_t len)
+{
+    size_t ret = write_int64(len);
+    if (ret == 0 || offset + len > length) return 0;
+    memcpy(&buf[offset], s, len);
+    if (debug_enabled) {
+        printf("write_string: offset=%zu, len=%zu, value=\"%s\"\n",
+            offset, len, std::string((const char*)&buf[offset], len).c_str());
+    }
+    offset += len;
+    return len + ret;
+}
+
+template <typename INT, typename SWAP> size_t mynub_conn::read_int(INT *num, SWAP f)
+{
+    if (offset + sizeof(num) > length) return 0;
+    INT t;
+    memcpy(&t, &buf[offset], sizeof(INT));
+    *num = f(t);
+    if (debug_enabled) {
+        printf("read_int%zu: offset=%zu, value=%lld\n",
+            sizeof(num)<<3, offset, (long long)*num);
+    }
+    offset += sizeof(*num);
+    return sizeof(*num);
+}
+
+size_t mynub_conn::read_string(char *s, size_t buf_len, size_t *str_len)
+{
+    int64_t len64;
+    size_t ret = read_int64(&len64);
+    if (ret == 0 || offset + len64 > length) return 0;
+    if ((size_t)len64 > buf_len) len64 = buf_len;
+    memcpy(s, &buf[offset], len64);
+    if (debug_enabled) {
+        printf("read_string: offset=%zu, len=%zu, value=\"%s\"\n",
+             offset, len64,std::string((const char*)&buf[offset], len64).c_str());
+    }
+    offset += len64;
+    if (str_len) *str_len = len64;
+    return len64 + ret;
+}
+
+void mynub_conn::copy_input(struct span input)
+{
+    size_t copy_len = input.length;
+    if (offset + copy_len > length) copy_len = length - offset;
+    if (input.data != buf + offset) {
+        memmove(buf + offset, input.data, copy_len);
+    }
+}
+
+struct mynub_conn::span mynub_conn::copy_output()
+{
+    return mynub_conn::span{&buf[0], offset };
+}
+
+struct mynub_conn::span mynub_conn::copy_remaining()
+{
+    return mynub_conn::span{&buf[offset], length-offset };
+}
+
+
+/*
+ * nub client
+ */
+
+static void my_nub_client_close_cb(xi_nub_conn *conn, xi_nub_error err)
+{
+    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+
+    if (err) {
+        fprintf(stderr, "error: close(): error_code=%d\n", err);
+        return;
+    }
+
+    if (debug_enabled) {
+        printf("my_nub_client_close_cb:\n");
+    }
+}
+
+static void my_nub_client_read_cb(xi_nub_conn *conn, xi_nub_error err,
+    void *buf, size_t len)
+{
+    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+
+    if (err) {
+        fprintf(stderr, "error: read(): error_code=%d\n", err);
+        return;
+    }
+
+    if (debug_enabled) {
+        printf("my_nub_client_read_cb: conn=%s, len=%zu\n",
+            xi_nub_conn_get_identity(conn), len);
+    }
+
+    myconn->copy_input(mynub_conn::span{buf, len});
+
+    /* place to store results */
+    vector<unicode_data> r;
+
+    /* parse response */
+    int64_t nitems;
+    myconn->read_int64(&nitems);
+    r.resize(nitems);
+    for (auto &d : r) {
+        int32_t codepoint = 0;
+        size_t str_len = 0;
+        char str_buf[1024];
+        myconn->read_int32(&codepoint);
+        d.Code = codepoint;
+        myconn->read_string(str_buf, sizeof(str_buf), &str_len);
+        d.Name = std::string(str_buf, str_len);
+    }
+
+    /* print response */
+    for (size_t i = 0; i < r.size(); i++) {
+        char buf[5];
+        utf32_to_utf8(buf, sizeof(buf), r[i].Code);
+        printf("%s\tU+%04x\t%s\n", buf, r[i].Code, r[i].Name.c_str());
+    }
+
+    xi_nub_conn_close(conn, my_nub_client_close_cb);
+}
+
+static void my_nub_client_write_cb(xi_nub_conn *conn, xi_nub_error err,
+    void *buf, size_t len)
+{
+    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+
+    if (err) {
+        fprintf(stderr, "error: write(): error_code=%d\n", err);
+        return;
+    }
+
+    if (debug_enabled) {
+        printf("my_nub_client_write_cb: conn=%s, len=%zu\n",
+            xi_nub_conn_get_identity(conn), len);
+    }
+
+    /* read response */
+    myconn->reset();
+    struct mynub_conn::span in = myconn->copy_remaining();
+    xi_nub_conn_read(conn, in.data, in.length, my_nub_client_read_cb);
+}
+
+static void my_nub_client_connect_cb(xi_nub_conn *conn, xi_nub_error err)
+{
+    if (err) {
+        fprintf(stderr, "error: connect(): error_code=%d\n", err);
+        return;
+    }
+
+    if (debug_enabled) {
+        printf("my_nub_client_connect_cb\n");
+    }
+
+    mynub_conn *myconn = new mynub_conn{};
+    xi_nub_conn_set_user_data(conn, myconn);
+
+    /* prepare request */
+    string request = join(client_search_terms, " ", 0, client_search_terms.size());
+
+    /* debug print request */
+    if (debug_enabled) printf("request: %s\n", request.c_str());
+
+    /* write request */
+    myconn->reset();
+    myconn->write_string(request.data(), request.size());
+    struct mynub_conn::span out = myconn->copy_output();
+    xi_nub_conn_write(conn, out.data, out.length, my_nub_client_write_cb);
+}
+
+static void do_nub_client()
+{
+    xi_nub_ctx *ctx = xi_nub_ctx_get_root_context();
+
+    if (debug_enabled) {
+        printf("\n-- Xi nub-client\n");
+        printf("profile_path = \"%s\";\n", xi_nub_ctx_get_profile_path(ctx));
+    }
+
+    /* start client */
+    const char* args[] = { "xi", "nub-server" };
+    xi_nub_client *c = xi_nub_client_new(ctx, 2, args);
+    const auto t1 = high_resolution_clock::now();
+    xi_nub_client_connect(c, 8, my_nub_client_connect_cb);
+    const auto t2 = high_resolution_clock::now();
+
+    /*
+     * print timings
+     */
+    if (timings_enabled)
+    {
+        auto tl = duration_cast<nanoseconds>(t2 - t1).count();
+        printf("[nub-client] search = %.fμs\n", tl / 1e3);
+    }
+}
+
+/*
+ * nub server
+ */
+
+struct nub_server_state
+{
+    subhash_map index;
+    vector<unicode_data> data;
+    vector<vector<string>> tokens;
+};
+
+static void my_nub_server_close_cb(xi_nub_conn *conn, xi_nub_error err)
+{
+    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+
+    if (err) {
+        fprintf(stderr, "error: close(): error_code=%d\n", err);
+        return;
+    }
+
+    if (debug_enabled) {
+        printf("my_nub_server_close_cb\n");
+    }
+}
+
+static void my_nub_server_write_cb(xi_nub_conn *conn, xi_nub_error err,
+    void *buf, size_t len)
+{
+    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+
+    if (err) {
+        fprintf(stderr, "error: write(): error_code=%d\n", err);
+        return;
+    }
+
+    if (debug_enabled) {
+        printf("my_nub_server_write_cb: conn=%s, len=%zu\n",
+            xi_nub_conn_get_identity(conn), len);
+    }
+
+    xi_nub_conn_close(conn, my_nub_server_close_cb);
+}
+
+static void my_nub_server_read_cb(xi_nub_conn *conn, xi_nub_error err,
+    void *buf, size_t len)
+{
+    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+
+    if (err) {
+        fprintf(stderr, "error: read(): error_code=%d\n", err);
+        return;
+    }
+
+    if (debug_enabled) {
+        printf("my_nub_server_read_cb: conn=%s, len=%zu\n",
+            xi_nub_conn_get_identity(conn), len);
+    }
+
+    myconn->copy_input(mynub_conn::span{buf, len});
+
+    /* parse request */
+    size_t str_len = 0;
+    char str_buf[1024];
+    myconn->read_string(str_buf, sizeof(str_buf), &str_len);
+    std::string request(str_buf, str_len);
+
+    /* get index */
+    xi_nub_ctx *ctx = xi_nub_conn_get_context(conn);
+    nub_server_state *state = (nub_server_state *)xi_nub_ctx_get_user_data(ctx);
+    if (state == nullptr) {
+        state = new nub_server_state();
+        xi_nub_ctx_set_user_data(ctx, state);
+
+        /* create index */
+        const auto t1 = high_resolution_clock::now();
+        state->data = read_unicode_data();
+        const auto t2 = high_resolution_clock::now();
+        tokenize_data(state->data, state->tokens);
+        index_rabin_karp(state->index, state->tokens);
+        const auto t3 = high_resolution_clock::now();
+
+        if (debug_enabled)
+        {
+            const auto t3 = high_resolution_clock::now();
+            auto tl = duration_cast<nanoseconds>(t2 - t1).count();
+            auto ti = duration_cast<nanoseconds>(t3 - t2).count();
+            printf("[Rabin-Karp] load = %.fμs, index = %.fμs\n",
+                tl / 1e3, ti / 1e3);
+        }
+    }
+
+    /* perform request */
+    vector<string> terms = split(request, " ");
+    const auto t1 = high_resolution_clock::now();
+    vector<unicode_data> r = do_search_rabin_karp(state->data, state->tokens,
+        state->index, split(request, " "));
+    const auto t2 = high_resolution_clock::now();
+    auto ts = duration_cast<nanoseconds>(t2 - t1).count();
+    if (timings_enabled)
+    {
+        printf("[Rabin-Karp] search = %.fμs\n", ts / 1e3);
+    }
+
+    /* debug print request and response */
+    if (debug_enabled) {
+        printf("request: %s\n", request.c_str());
+        for (size_t i = 0; i < r.size(); i++) {
+            char buf[5];
+            utf32_to_utf8(buf, sizeof(buf), r[i].Code);
+            printf("response: %s\tU+%04x\t%s\n", buf, r[i].Code, r[i].Name.c_str());
+        }
+    }
+
+    /* write response */
+    myconn->reset();
+    myconn->write_int64((int64_t)r.size());
+    for (size_t i = 0; i < r.size(); i++) {
+        myconn->write_int32((int32_t)r[i].Code);
+        myconn->write_string(r[i].Name.data(), r[i].Name.size());
+    }
+    struct mynub_conn::span out = myconn->copy_output();
+    xi_nub_conn_write(conn, out.data, out.length, my_nub_server_write_cb);
+}
+
+static void my_nub_server_accept_cb(xi_nub_conn *conn, xi_nub_error err)
+{
+    if (err) {
+        fprintf(stderr, "error: accept(): error_code=%d\n", err);
+        return;
+    }
+
+    if (debug_enabled) {
+        printf("my_nub_server_accept_cb\n");
+    }
+
+    mynub_conn *myconn = new mynub_conn{};
+    xi_nub_conn_set_user_data(conn, myconn);
+
+    /* read request */
+    myconn->reset();
+    struct mynub_conn::span in = myconn->copy_remaining();
+    xi_nub_conn_read(conn, in.data, in.length, my_nub_server_read_cb);
+}
+
+static void do_nub_server()
+{
+    xi_nub_ctx *ctx = xi_nub_ctx_get_root_context();
+
+    if (debug_enabled) {
+        printf("\n-- Xi nub-server\n");
+        printf("profile_path = \"%s\";\n", xi_nub_ctx_get_profile_path(ctx));
+    }
+
+    /* start server */
+    const char* args[] = { "xi", "nub-server" };
+    xi_nub_server *s = xi_nub_server_new(ctx, 2, args);
+    xi_nub_server_accept(s, 8, my_nub_server_accept_cb);
 }
 
 /*
@@ -376,9 +830,14 @@ void print_help(int argc, char **argv)
         "  unicode greek letter mu      # search for 'greek', letter' and 'mu'\n"
         "  unicode mathematical mu      # search for 'mathematical' and 'mu'\n"
         "\n"
+        "Experimental:\n"
+        "  nub-client [<term>]+         perform search on nub server\n"
+        "  nub-server                   start nub server on local socket\n"
+        "\n"
         "Options:\n"
         "  -u, --data-file <name>       unicode data file\n"
-        "  -d, --debug                  enable search debug and timings\n"
+        "  -d, --debug                  enable search debug\n"
+        "  -t, --timings                enable search timings\n"
         "  -x, --brute-force            disable search optimization\n"
         "  -h, --help                   command line help\n",
         argv[0]);
@@ -400,6 +859,28 @@ bool match_option(const char *arg, const char *opt, const char *longopt)
 bool match_command(const char *arg, const char *cmd)
 {
     return strcmp(arg, cmd) == 0;
+}
+
+bool parse_nub_client(int argc, char **argv)
+{
+    if (argc < 2) {
+        fprintf(stderr, "error: unicode search missing terms\n");
+        return false;
+    }
+    int i = 1;
+    while (i < argc) {
+        client_search_terms.push_back(argv[i++]);
+    }
+    return (nub_client = true);
+}
+
+bool parse_nub_server(int argc, char **argv)
+{
+    if (argc != 1) {
+        fprintf(stderr, "error: invalid nub-server options\n");
+        return false;
+    }
+    return (nub_server = true);
 }
 
 bool parse_unicode_search(int argc, char **argv)
@@ -425,6 +906,9 @@ bool parse_options(int argc, char **argv)
         } else if (match_option(argv[i], "-d", "--debug")) {
             debug_enabled = true;
             i++;
+        } else if (match_option(argv[i], "-t", "--timings")) {
+            timings_enabled = true;
+            i++;
         } else if (match_option(argv[i], "-x", "--brute-force")) {
             optimized_search = false;
             i++;
@@ -437,6 +921,10 @@ bool parse_options(int argc, char **argv)
 
     if (i >= argc) {
         fprintf(stderr, "error: expecting command\n");
+    } else if (match_command(argv[i], "nub-client")) {
+        return parse_nub_client(argc-i, argv+i);
+    } else if (match_command(argv[i], "nub-server")) {
+        return parse_nub_server(argc-i, argv+i);
     } else if (match_command(argv[i], "unicode")) {
         return parse_unicode_search(argc-i, argv+i);
     } else {
@@ -459,9 +947,16 @@ int main(int argc, char **argv)
 
     if (unicode_search_terms.size()) {
         if (optimized_search) {
-            do_search_rabin_karp(unicode_search_terms);
+            do_print_results(do_search_rabin_karp(unicode_search_terms));
         } else {
-            do_search_brute_force(unicode_search_terms);
+            do_print_results(do_search_brute_force(unicode_search_terms));
         }
+    }
+
+    if (nub_client) {
+        do_nub_client();
+    }
+    else if (nub_server) {
+        do_nub_server();
     }
 }
