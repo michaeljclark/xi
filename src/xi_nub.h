@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 /*
  * const char* argv[] = { "Xi", "nub-server" };
  *
@@ -45,6 +47,8 @@ typedef enum
 {
 	xi_nub_success,
 	xi_nub_einval,
+	xi_nub_eexist,
+	xi_nub_eacces,
 	xi_nub_econnrefused,
 	xi_nub_egeneric = 255
 } xi_nub_error;
@@ -81,6 +85,8 @@ xi_nub_ctx* xi_nub_ctx_get_root_context();
 const char* xi_nub_ctx_get_profile_path(xi_nub_ctx *ctx);
 void xi_nub_ctx_set_user_data(xi_nub_ctx *ctx, void *data);
 void* xi_nub_ctx_get_user_data(xi_nub_ctx *ctx);
+
+void xi_nub_semaphore();
 
 #ifdef __cplusplus
 }

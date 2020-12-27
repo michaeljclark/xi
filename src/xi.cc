@@ -815,7 +815,7 @@ static void do_nub_server()
  * command line options
  */
 
-void print_help(int argc, char **argv)
+static void print_help(int argc, char **argv)
 {
     fprintf(stderr,
         "Usage: %s [options] [command] <command-parameters>\n"
@@ -843,7 +843,7 @@ void print_help(int argc, char **argv)
         argv[0]);
 }
 
-bool check_param(bool cond, const char *param)
+static bool check_param(bool cond, const char *param)
 {
     if (cond) {
         printf("error: %s requires parameter\n", param);
@@ -851,17 +851,17 @@ bool check_param(bool cond, const char *param)
     return (help_text = cond);
 }
 
-bool match_option(const char *arg, const char *opt, const char *longopt)
+static bool match_option(const char *arg, const char *opt, const char *longopt)
 {
     return strcmp(arg, opt) == 0 || strcmp(arg, longopt) == 0;
 }
 
-bool match_command(const char *arg, const char *cmd)
+static bool match_command(const char *arg, const char *cmd)
 {
     return strcmp(arg, cmd) == 0;
 }
 
-bool parse_nub_client(int argc, char **argv)
+static bool parse_nub_client(int argc, char **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "error: unicode search missing terms\n");
@@ -874,7 +874,7 @@ bool parse_nub_client(int argc, char **argv)
     return (nub_client = true);
 }
 
-bool parse_nub_server(int argc, char **argv)
+static bool parse_nub_server(int argc, char **argv)
 {
     if (argc != 1) {
         fprintf(stderr, "error: invalid nub-server options\n");
@@ -883,7 +883,7 @@ bool parse_nub_server(int argc, char **argv)
     return (nub_server = true);
 }
 
-bool parse_unicode_search(int argc, char **argv)
+static bool parse_unicode_search(int argc, char **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "error: unicode search missing terms\n");
@@ -896,7 +896,7 @@ bool parse_unicode_search(int argc, char **argv)
     return true;
 }
 
-bool parse_options(int argc, char **argv)
+static bool parse_options(int argc, char **argv)
 {
     int i = 1;
     while (i < argc) {
