@@ -512,8 +512,8 @@ static xi_nub_mm _map_file(const char *fname, share_mode smode, int access,
     if (access & file_read) oaccess |= FILE_GENERIC_READ;
     if (access & file_write) oaccess |= FILE_GENERIC_WRITE;
     if (access & file_append) oaccess |= FILE_APPEND_DATA;
-    HANDLE h = CreateFile(fname, oaccess, 0, NULL, omode,
-                       FILE_FLAG_RANDOM_ACCESS, NULL);
+    HANDLE h = CreateFileW(utf8_to_utf16(fname).c_str(), oaccess, 0, NULL,
+                           omode, FILE_FLAG_RANDOM_ACCESS, NULL);
     if (h == INVALID_HANDLE_VALUE)
     {
         fprintf(stderr, "error: CreateFile(\"%s\"): ret=0x%08x\n",
@@ -646,8 +646,8 @@ static xi_nub_win32_file _open_file(const char *fname, share_mode smode, int acc
     if (access & file_read) oaccess |= FILE_GENERIC_READ;
     if (access & file_write) oaccess |= FILE_GENERIC_WRITE;
     if (access & file_append) oaccess |= FILE_APPEND_DATA;
-    HANDLE h = CreateFile(fname, oaccess, 0, NULL, omode,
-                       FILE_FLAG_RANDOM_ACCESS, NULL);
+    HANDLE h = CreateFileW(utf8_to_utf16(fname).c_str(), oaccess, 0, NULL,
+                       omode, FILE_FLAG_RANDOM_ACCESS, NULL);
     return xi_nub_win32_file(h, GetLastError());
 }
 #endif
