@@ -47,12 +47,6 @@ int test_sem_cb(void*)
 	return 5;
 }
 
-static void msleep(int millis)
-{
-    struct timespec tv = { millis / 1000, (millis % 1000) * 1000000 };
-    thrd_sleep(&tv, NULL);
-}
-
 void test_sem()
 {
 	thrd_t t;
@@ -67,7 +61,7 @@ void test_sem()
 
 	t1 = _clock_time_ns();
 	thrd_create(&t, &test_sem_cb, NULL);
-	msleep(300);
+	_thread_sleep(300);
 	_semaphore_signal(&test_sem1);
 	thrd_join(t, &res);
 	t4 = _clock_time_ns();

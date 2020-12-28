@@ -350,6 +350,14 @@ static bool _semaphore_signal(xi_nub_win32_semaphore *s)
 }
 #endif
 
+#if defined OS_WINDOWS
+static bool _thread_sleep(int millis)
+{
+    Sleep(millis);
+    return true;
+}
+#endif
+
 
 /*
  * posix named semaphore
@@ -431,6 +439,15 @@ static bool _semaphore_signal(xi_nub_unix_semaphore *s)
 {
     int ret = sem_post(s->sem);
     return (ret == 0);
+}
+#endif
+
+#if defined OS_POSIX
+static bool _thread_sleep(int millis)
+{
+    struct timespec ta = { millis / 1000, (millis % 1000) * 1000000 };
+    int ret = nanosleep(&ta, NULL);
+    return ret == 0;
 }
 #endif
 
