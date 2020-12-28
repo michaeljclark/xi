@@ -35,6 +35,7 @@
 #include "hashmap.h"
 #include "stdendian.h"
 #include "xi_nub.h"
+#include "xi_common.h"
 
 /*
  * xi (aka ξ), a search tool for the Unicode Character Database.
@@ -394,6 +395,9 @@ static vector<unicode_data> do_search_rabin_karp(vector<string> terms)
 
 void do_print_results(vector<unicode_data> data)
 {
+#if defined OS_WINDOWS
+    SetConsoleOutputCP(CP_UTF8);
+#endif
     for (size_t i = 0; i < data.size(); i++) {
         char buf[5];
         utf32_to_utf8(buf, sizeof(buf), data[i].Code);
