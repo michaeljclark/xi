@@ -634,6 +634,10 @@ static void do_nub_client()
 {
     xi_nub_ctx *ctx = xi_nub_ctx_get_root_context();
 
+#if defined OS_WINDOWS
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+
     if (debug_enabled) {
         printf("\n-- Xi nub-client\n");
         printf("profile_path = \"%s\";\n", xi_nub_ctx_get_profile_path(ctx));
