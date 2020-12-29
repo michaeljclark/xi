@@ -240,28 +240,3 @@ xi_nub_ctx* xi_nub_ctx_get_root_context()
 
     return &ctx;
 }
-
-void xi_nub_semaphore()
-{
-    char sem_file[MAXPATHLEN];
-    xi_nub_ctx* ctx = xi_nub_ctx_get_root_context();
-    const char* profile_path = xi_nub_ctx_get_profile_path(ctx);
-    snprintf(sem_file, sizeof(sem_file), "%s%s", profile_path,
-        PATH_SEPARATOR "semaphore.bin");
-
-    printf("semaphore file: %s\n", sem_file);
-
-    bool leader = false;
-    auto f = _open_file(sem_file, file_create_new, file_append);
-    if (f.has_error()) {
-        f = _open_file(sem_file, file_open_existing, file_append);
-    } else {
-        leader = true;
-    }
-    uint32_t pid = (uint32_t)_get_processs_id();
-    _write(&f, &pid, sizeof(pid));
-    xi_nub_result off = _get_file_offset(&f);
-    uint32_t ticket = (uint32_t)off.bytes >> 2;
-    _close(&f);
-    printf("leader=%u pid=%u ticket=%u\n", leader, pid, ticket);
-}
