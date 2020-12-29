@@ -57,6 +57,7 @@ static bool timings_enabled = false;
 static bool optimized_search = true;
 vector<string> client_search_terms;
 vector<string> unicode_search_terms;
+string unicode_numeric_term;
 
 /*
  * schema for UnicodeData.txt from Unicode Character Database (UCD.zip)
@@ -388,6 +389,42 @@ static vector<unicode_data> do_search_rabin_karp(vector<string> terms)
         auto ts = duration_cast<nanoseconds>(t3 - t2).count();
         printf("[Rabin-Karp] load = %.fμs, search = %.fμs\n",
             tl / 1e3, ts / 1e3);
+    }
+
+    return results;
+}
+
+int64_t parse_value(const char* valstr)
+{
+    int64_t val;
+    char *endptr = nullptr;
+    if (strncmp(valstr, "0x", 2) == 0) {
+        val = strtoull(valstr + 2, &endptr, 16);
+    } else if (strncmp(valstr, "0b", 2) == 0) {
+        val = strtoull(valstr + 2, &endptr, 2);
+    } else {
+        val = strtoull(valstr, &endptr, 10);
+    }
+    return val;
+}
+
+static vector<unicode_data> do_codepoint_lookup(string term)
+{
+    /*
+     * load unicode data
+     */
+    vector<unicode_data> data = read_unicode_data();
+
+    /*
+     * perform lookup
+     */
+    vector<unicode_data> results;
+    uint32_t lookup_code = (int32_t)parse_value(term.c_str());
+    for (size_t i = 0; i < data.size(); i++) {
+        size_t matches = 0;
+        if (data[i].Code == lookup_code) {
+            results.push_back(data[i]);
+        }
     }
 
     return results;
@@ -904,6 +941,16 @@ static bool parse_unicode_search(int argc, char **argv)
     return true;
 }
 
+static bool parse_codepint_lookup(int argc, char **argv)
+{
+    if (argc != 2) {
+        fprintf(stderr, "error: codepoint lookup missing term\n");
+        return false;
+    }
+    unicode_numeric_term = argv[1];
+    return true;
+}
+
 static bool parse_options(int argc, char **argv)
 {
     int i = 1;
@@ -935,6 +982,8 @@ static bool parse_options(int argc, char **argv)
         return parse_nub_server(argc-i, argv+i);
     } else if (match_command(argv[i], "unicode")) {
         return parse_unicode_search(argc-i, argv+i);
+    } else if (match_command(argv[i], "codepoint")) {
+        return parse_codepint_lookup(argc-i, argv+i);
     } else {
         fprintf(stderr, "error: unknown command\n");
     }
@@ -959,6 +1008,9 @@ int main(int argc, char **argv)
         } else {
             do_print_results(do_search_brute_force(unicode_search_terms));
         }
+    }
+    if (unicode_numeric_term.size()) {
+        do_print_results(do_codepoint_lookup(unicode_numeric_term));
     }
 
     if (nub_client) {
