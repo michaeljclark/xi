@@ -46,7 +46,7 @@ struct xi_nub_conn
     xi_nub_ctx *ctx;
     xi_nub_server *server;
     xi_nub_client *client;
-    xi_nub_sock *sock;
+    xi_nub_platform_sock sock;
     void *user_data;
 };
 
@@ -147,18 +147,19 @@ void xi_nub_server_accept(xi_nub_server *server, int nthreads, xi_nub_accept_cb 
     }
 
     for (;;) {
-        xi_nub_platform_sock sock = listen_socket_accept(listen);
+        xi_nub_conn conn{
+            server->ctx, server, NULL, listen_socket_accept(listen)
+        };
+
         if (debug) {
-            printf("xi_nub_server_accept: accepted sock=%s\n", sock.identity());
+            printf("xi_nub_server_accept: accepted sock=%s\n", conn.sock.identity());
         }
 
-        xi_nub_conn conn;
-        conn.ctx = server->ctx;
-        conn.server = server;
-        conn.sock = new xi_nub_platform_sock(sock);
-
-        if (sock.has_error()) cb(&conn, sock.error_code());
-        else cb(&conn, xi_nub_success);
+        if (conn.sock.has_error()) {
+            cb(&conn, conn.sock.error_code());
+        } else {
+            cb(&conn, xi_nub_success);
+        }
 
         /* TODO - implement server shutdown */
     }
@@ -182,15 +183,14 @@ xi_nub_client* xi_nub_client_new(xi_nub_ctx *ctx, int argc, const char **argv)
 
 void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_cb cb)
 {
-    xi_nub_platform_sock sock = client_socket_connect();
-    if (debug) {
-        printf("xi_nub_client_connect: sock=%s\n", sock.identity());
-    }
 
-    xi_nub_conn conn;
-    conn.ctx = client->ctx;
-    conn.client = client;
-    conn.sock = new xi_nub_platform_sock(sock);
+    xi_nub_conn conn{
+        client->ctx, NULL, client, client_socket_connect()
+    };
+
+    if (debug) {
+        printf("xi_nub_client_connect: sock=%s\n", conn.sock.identity());
+    }
 
 #if 0
     if (sock.has_error()) cb(&conn, sock.error_code());
@@ -200,7 +200,9 @@ void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_c
      * if we get a socket error, we won't tell client, we are going
      * to attempt to launch a server
      */
-    if (sock.has_error()) {
+    if (conn.sock.has_error())
+    {
+        _close(&conn.sock);
         /*
          * EXPERIMENTAL - launch atomicity semaphores not implemented
          */
@@ -208,6 +210,14 @@ void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_c
         int argc = (int)client->args.size();
         xi_nub_os_process p = _create_process(argc, (const char**)argv);
         free(argv);
+
+        _thread_sleep(100);
+        conn.sock = client_socket_connect();
+        if (conn.sock.has_error()) {
+            cb(&conn, conn.sock.error_code());
+        } else {
+            cb(&conn, xi_nub_success);
+        }
     } else {
         cb(&conn, xi_nub_success);
     }
@@ -221,40 +231,38 @@ void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_c
 
 void xi_nub_conn_read(xi_nub_conn *conn, void *buf, size_t len, xi_nub_read_cb cb)
 {
-    auto file = reinterpret_cast<xi_nub_platform_sock*>(conn->sock);
-    xi_nub_result result = _read(file, buf, len);
+    xi_nub_result result = _read(&conn->sock, buf, len);
     if (debug) {
         printf("xi_nub_conn_read: sock=%s, len=%zu: ret=%zd, error=%d\n",
-            conn->sock->identity(), len, result.bytes, result.error);
+            conn->sock.identity(), len, result.bytes, result.error);
     }
     if (cb) cb(conn, result.error, buf, result.bytes);
 }
 
 void xi_nub_conn_write(xi_nub_conn *conn, void *buf, size_t len, xi_nub_write_cb cb)
 {
-    auto file = reinterpret_cast<xi_nub_platform_sock*>(conn->sock);
-    xi_nub_result result = _write(file, buf, len);
+    xi_nub_result result = _write(&conn->sock, buf, len);
     if (debug) {
         printf("xi_nub_conn_write: sock=%s, len=%zu: ret=%zd, error=%d\n",
-            conn->sock->identity(), len, result.bytes, result.error);
+            conn->sock.identity(), len, result.bytes, result.error);
     }
     if (cb) cb(conn, result.error, buf, result.bytes);
 }
 
 void xi_nub_conn_close(xi_nub_conn *conn, xi_nub_close_cb cb)
 {
-    auto file = reinterpret_cast<xi_nub_platform_sock*>(conn->sock);
-    xi_nub_result result = conn->server ? _disconnect(file) : _close(file);
+    xi_nub_result result = conn->server
+        ? _disconnect(&conn->sock) : _close(&conn->sock);
     if (debug) {
         printf("xi_nub_conn_close: sock=%s: ret=%zd, error=%d\n",
-            conn->sock->identity(), result.bytes, result.error);
+            conn->sock.identity(), result.bytes, result.error);
     }
     if (cb) cb(conn, result.error);
 }
 
 const char* xi_nub_conn_get_identity(xi_nub_conn *conn)
 {
-    return conn->sock->identity();
+    return conn->sock.identity();
 }
 
 

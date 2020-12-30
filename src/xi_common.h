@@ -143,6 +143,7 @@ static xi_nub_error os_error_code(DWORD error) {
 static xi_nub_error os_error_code(int error) {
     switch (error) {
     case 0:             return xi_nub_success;
+    case EBADF:
     case EINVAL:        return xi_nub_einval;
     case ECONNREFUSED:  return xi_nub_econnrefused;
     case EEXIST:        return xi_nub_eexist;
@@ -543,8 +544,10 @@ static xi_nub_os_process _create_process(int argc, const char **argv)
 
     if (argc < 1) return xi_nub_os_process{};
 
-    for (size_t i = 0; i < argc; i++) {
-        printf("exec[%zu]=\"%s\"\n", i, argv[i]);
+    if (debug) {
+        for (size_t i = 0; i < argc; i++) {
+            printf("exec[%zu]=\"%s\"\n", i, argv[i]);
+        }
     }
 
     std::wstring cmd_line;
@@ -561,7 +564,8 @@ static xi_nub_os_process _create_process(int argc, const char **argv)
     BOOL result = CreateProcessW(
         NULL, (LPWSTR)cmd_line.data(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi
     );
-    printf("result=%d pid=%d\n", result, pi.dwProcessId);
+
+    // TODO - add process handles, pid and error to result
 
     return xi_nub_os_process{};
 }
@@ -577,16 +581,25 @@ struct xi_nub_os_process
 #if defined OS_POSIX
 static xi_nub_os_process _create_process(int argc, const char **argv)
 {
-    for (size_t i = 0; i < argc; i++) {
-        printf("exec[%zu]=\"%s\"\n", i, argv[i]);
+    if (argc < 1) return xi_nub_os_process{};
+
+    if (debug) {
+        for (size_t i = 0; i < argc; i++) {
+            printf("exec[%zu]=\"%s\"\n", i, argv[i]);
+        }
     }
 
     int status;
     pid_t pid1 = fork();
     if (pid1) {
         /* top-parent */
-        waitpid(pid1, &status, 0);
     } else {
+        int stdin_fd = open("/dev/null", O_RDONLY);
+        int stdout_fd =open("/dev/null", O_WRONLY);
+        int stderr_fd =open("/dev/null", O_WRONLY);
+        dup2(stdin_fd, STDIN_FILENO);
+        dup2(stdout_fd, STDOUT_FILENO);
+        dup2(stderr_fd, STDERR_FILENO);
         setsid();
         pid_t pid2 = fork();
         if (pid2) {
@@ -597,6 +610,8 @@ static xi_nub_os_process _create_process(int argc, const char **argv)
             execvp(argv[0], (char* const*)argv);
         }
      }
+
+    // TODO - add pid and error to result
 
     return xi_nub_os_process{};
 }
@@ -877,25 +892,25 @@ static xi_nub_unix_file _open_file(const char *fname, share_mode smode, int acce
 static xi_nub_result _read(xi_nub_unix_file *file, void *buf, size_t len)
 {
     intptr_t ret = read(file->fd, buf, len);
-    return xi_nub_result{ os_error_code(errno), ret };
+    return xi_nub_result{ os_error_code(ret < 0 ? errno : 0), ret };
 }
 
 static xi_nub_result _write(xi_nub_unix_file *file, void *buf, size_t len)
 {
     intptr_t ret = write(file->fd, buf, len);
-    return xi_nub_result{ os_error_code(errno), ret };
+    return xi_nub_result{ os_error_code(ret < 0 ? errno : 0), ret };
 }
 
 static xi_nub_result _disconnect(xi_nub_unix_file *file)
 {
     intptr_t ret = close(file->fd);
-    return xi_nub_result{ os_error_code(errno), ret };
+    return xi_nub_result{ os_error_code(ret < 0 ? errno : 0), ret };
 }
 
 static xi_nub_result _close(xi_nub_unix_file *file)
 {
     intptr_t ret = close(file->fd);
-    return xi_nub_result{ os_error_code(errno), ret };
+    return xi_nub_result{ os_error_code(ret < 0 ? errno : 0), ret };
 }
 #endif
 
