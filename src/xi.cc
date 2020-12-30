@@ -681,7 +681,7 @@ static void do_nub_client()
     }
 
     /* start client */
-    const char* args[] = { "xi", "nub-server" };
+    const char* args[] = { "<self>", "nub-server" };
     xi_nub_client *c = xi_nub_client_new(ctx, 2, args);
     const auto t1 = high_resolution_clock::now();
     xi_nub_client_connect(c, 8, my_nub_client_connect_cb);
@@ -851,7 +851,7 @@ static void do_nub_server()
     }
 
     /* start server */
-    const char* args[] = { "xi", "nub-server" };
+    const char* args[] = { "<self>", "nub-server" };
     xi_nub_server *s = xi_nub_server_new(ctx, 2, args);
     xi_nub_server_accept(s, 8, my_nub_server_accept_cb);
 }

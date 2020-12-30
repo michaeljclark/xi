@@ -34,6 +34,10 @@ add_executable(test_sem tests/test_sem.cc src/xi_nub.cc)
 target_link_libraries(test_sem ${CMAKE_THREAD_LIBS_INIT})
 add_test(test_sem test_sem)
 
+add_executable(test_exe tests/test_exe.cc)
+target_link_libraries(test_exe ${CMAKE_THREAD_LIBS_INIT})
+add_test(test_exe test_exe)
+
 if (WIN32)
 set_source_files_properties(src/xi.cc src/xi_nub.cc
 	PROPERTIES COMPILE_DEFINITIONS _CRT_SECURE_NO_WARNINGS

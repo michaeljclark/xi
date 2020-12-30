@@ -21,6 +21,7 @@
 #include <cerrno>
 
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #define OS_WINDOWS
@@ -34,6 +35,10 @@
 #ifdef __linux__
 #define OS_LINUX
 #define OS_POSIX
+#endif
+
+#if defined OS_MAX
+#include <mach-o/dyld.h>
 #endif
 
 #if defined OS_WINDOWS
@@ -50,6 +55,7 @@
 #include <sys/mman.h>
 #include <sys/un.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <pwd.h>
@@ -448,6 +454,151 @@ static bool _thread_sleep(int millis)
     struct timespec ta = { millis / 1000, (millis % 1000) * 1000000 };
     int ret = nanosleep(&ta, NULL);
     return ret == 0;
+}
+#endif
+
+/*
+ * executable path
+ */
+
+#if defined OS_WINDOWS
+static std::string _executable_path()
+{
+    //std::wstring mname, fname;
+    std::vector<wchar_t> mname, fname;
+    DWORD sz;
+    HANDLE h;
+
+    /* GetModuleFileNameW returns size written which is equal to the
+     * buffer size in which case we double the size until it fits. */
+    mname.resize(MAXPATHLEN);
+    sz = GetModuleFileNameW(NULL, mname.data(), (DWORD)mname.size());
+    while (sz == mname.size()) {
+        mname.resize(mname.size() * 2);
+        sz = GetModuleFileNameW(NULL, mname.data(), (DWORD)mname.size());
+    }
+
+    /* open executable to resolve the canonical path */
+    h = CreateFileW(mname.data(), 0, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) {
+        return utf16_to_utf8(std::wstring(mname.data(), mname.size()));
+    }
+
+    /* GetFinalPathNameByHandleW returns total size so use resize pattern
+     * and the size returned includes the null pointer so we must subtract. */
+    sz = GetFinalPathNameByHandleW(h, fname.data(), (DWORD)fname.size(),
+                                   VOLUME_NAME_NONE);
+    fname.resize(sz);
+    sz = GetFinalPathNameByHandleW(h, fname.data(), (DWORD)fname.size(),
+                                   VOLUME_NAME_NONE);
+    CloseHandle(h);
+    /* this should not happen */
+    if (sz > fname.size()) {
+        return utf16_to_utf8(std::wstring(mname.data(), mname.size()));
+    } else {
+        return utf16_to_utf8(std::wstring(fname.data(), fname.size() - 1));
+    }
+}
+#endif
+
+#if defined OS_MACOS
+static std::string _executable_path()
+{
+    uint32_t sz;
+    std::string path;
+
+    assert(_NSGetExecutablePath(NULL, &sz) == -1);
+    data.resize(sz);
+    assert(_NSGetExecutablePath(path.data(), &sz) == 0);
+
+    return path;
+}
+#endif
+
+#if defined OS_LINUX
+static std::string _executable_path()
+{
+    char *mname = (char*)alloca(MAXPATHLEN);
+    ssize_t ret = readlink("/proc/self/exe", mname, MAXPATHLEN);
+    return (ret > 0) ? std::string(mname, ret) : std::string();
+}
+#endif
+
+/*
+ * process creation
+ */
+
+#if defined OS_WINDOWS
+struct xi_nub_os_process
+{
+
+};
+#endif
+
+#if defined OS_WINDOWS
+static xi_nub_os_process _create_process(int argc, const char **argv)
+{
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+
+    if (argc < 1) return xi_nub_os_process{};
+
+    for (size_t i = 0; i < argc; i++) {
+        printf("exec[%zu]=\"%s\"\n", i, argv[i]);
+    }
+
+    std::wstring cmd_line;
+    for (size_t i = 0; i < argc; i++) {
+        std::string s;
+        bool has_space = strchr(argv[i], ' ') != NULL;
+        if (has_space) s.append("\"");
+        s.append(std::string(argv[i]));
+        if (has_space) s.append("\"");
+        if (i > 0) cmd_line.append(1, ' ');
+        cmd_line.append(utf8_to_utf16(s));
+    }
+
+    BOOL result = CreateProcessW(
+        NULL, (LPWSTR)cmd_line.data(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi
+    );
+    printf("result=%d pid=%d\n", result, pi.dwProcessId);
+
+    return xi_nub_os_process{};
+}
+#endif
+
+#if defined OS_POSIX
+struct xi_nub_os_process
+{
+
+};
+#endif
+
+#if defined OS_POSIX
+static xi_nub_os_process _create_process(int argc, const char **argv)
+{
+    for (size_t i = 0; i < argc; i++) {
+        printf("exec[%zu]=\"%s\"\n", i, argv[i]);
+    }
+
+    int status;
+    pid_t pid1 = fork();
+    if (pid1) {
+        /* top-parent */
+        waitpid(pid1, &status, 0);
+    } else {
+        setsid();
+        pid_t pid2 = fork();
+        if (pid2) {
+            /* child-parent */
+            exit(0);
+        } else {
+            /* child-child */
+            execvp(argv[0], (char* const*)argv);
+        }
+     }
+
+    return xi_nub_os_process{};
 }
 #endif
 

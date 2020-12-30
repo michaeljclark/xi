@@ -18,6 +18,8 @@
 
 #include "xi_common.h"
 
+#include <vector>
+#include <algorithm>
 
 struct xi_nub_ctx
 {
@@ -30,11 +32,13 @@ struct xi_nub_ctx
 struct xi_nub_server
 {
     xi_nub_ctx *ctx;
+    std::vector<string> args;
 };
 
 struct xi_nub_client
 {
     xi_nub_ctx *ctx;
+    std::vector<string> args;
 };
 
 struct xi_nub_conn
@@ -85,6 +89,44 @@ static void xi_nub_find_dirs(xi_nub_ctx *ctx)
 
 
 /*
+ * convert command-line argument to a vector
+ */
+
+static std::vector<string> _get_args(int argc, const char **argv)
+{
+    std::vector<string> args;
+    for (size_t i = 0; i < argc; i++) {
+        if (i == 0 && strcmp(argv[0], "<self>") == 0) {
+            args.push_back(_executable_path());
+        } else {
+            args.push_back(argv[i]);
+        }
+    }
+    return args;
+}
+
+static char** _get_argv(std::vector<string> vec)
+{
+    size_t data_size = 0;
+    for (auto &s : vec) {
+        data_size += s.size() + 1;
+    }
+    size_t argc = vec.size();
+    size_t array_size = (argc + 1) * sizeof(intptr_t);
+    char *p = (char*)malloc(array_size + data_size);
+    memset(p, 0, array_size + data_size);
+    char *data = (char*)p + array_size;
+    char **arr = (char **)p;
+    for (size_t i = 0; i < argc; i++) {
+        arr[i] = data;
+        memcpy(data, vec[i].data(), vec[i].size());
+        data += vec[i].size() + 1;
+    }
+    return (char**)p;
+}
+
+
+/*
  * nub server
  */
 
@@ -92,6 +134,7 @@ xi_nub_server* xi_nub_server_new(xi_nub_ctx *ctx, int argc, const char **argv)
 {
     xi_nub_server *s = (xi_nub_server *)calloc(1, sizeof(xi_nub_server));
     s->ctx = xi_nub_ctx_get_root_context();
+    s->args = _get_args(argc, argv);
     if (debug) printf("xi_nub_server_new: server=%p\n", s);
     return s;
 }
@@ -130,6 +173,7 @@ xi_nub_client* xi_nub_client_new(xi_nub_ctx *ctx, int argc, const char **argv)
 {
     xi_nub_client *c = (xi_nub_client *)calloc(1, sizeof(xi_nub_client));
     c->ctx = xi_nub_ctx_get_root_context();
+    c->args = _get_args(argc, argv);
     if (debug) {
         printf("xi_nub_client_new: client=%p\n", c);
     }
@@ -148,8 +192,26 @@ void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_c
     conn.client = client;
     conn.sock = new xi_nub_platform_sock(sock);
 
+#if 0
     if (sock.has_error()) cb(&conn, sock.error_code());
     else cb(&conn, xi_nub_success);
+#else
+    /*
+     * if we get a socket error, we won't tell client, we are going
+     * to attempt to launch a server
+     */
+    if (sock.has_error()) {
+        /*
+         * EXPERIMENTAL - launch atomicity semaphores not implemented
+         */
+        char **argv = _get_argv(client->args);
+        int argc = (int)client->args.size();
+        xi_nub_os_process p = _create_process(argc, (const char**)argv);
+        free(argv);
+    } else {
+        cb(&conn, xi_nub_success);
+    }
+#endif
 }
 
 
