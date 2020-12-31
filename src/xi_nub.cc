@@ -139,12 +139,49 @@ xi_nub_server* xi_nub_server_new(xi_nub_ctx *ctx, int argc, const char **argv)
     return s;
 }
 
+static void xi_nub_wake_all_waiters()
+{
+    char sem_file[MAXPATHLEN];
+    xi_nub_ctx* ctx = xi_nub_ctx_get_root_context();
+    const char* profile_path = xi_nub_ctx_get_profile_path(ctx);
+    snprintf(sem_file, sizeof(sem_file), "%s%s", profile_path,
+        PATH_SEPARATOR "semaphore");
+
+    auto f = _open_file(sem_file, file_open_existing, file_read_write);
+    if (f.has_error()) return; /* no lock file */
+
+    char buf[1024];
+    xi_nub_result r = _read(&f, buf, sizeof(buf));
+    size_t num_waiters = (size_t)(r.bytes >> 2);
+    uint32_t *p = (uint32_t*)buf;
+    for (size_t i = 0; i < num_waiters; i++) {
+        uint32_t pid = *p++;
+        char sem_name[16];
+        snprintf(sem_name, sizeof(sem_name), "xi-%u", pid);
+        xi_nub_platform_semaphore sem = _semaphore_open(sem_name);
+        if (sem.has_error()) {
+            fprintf(stderr, "error: _semaphore_open: error_code=%d\n",
+                    sem.error_code());
+            exit(1);
+        }
+        if (debug) {
+            printf("xi_nub_wake_all_waiters: semaphore=%s *** signal ***\n", sem_name);
+        }
+        _semaphore_signal(&sem);
+    }
+    _close(&f);
+
+    _delete_file(sem_file);
+}
+
 void xi_nub_server_accept(xi_nub_server *server, int nthreads, xi_nub_accept_cb cb)
 {
     xi_nub_platform_sock listen = listen_socket_create();
     if (debug) {
         printf("xi_nub_server_accept: listening sock=%s\n", listen.identity());
     }
+
+    xi_nub_wake_all_waiters();
 
     for (;;) {
         xi_nub_conn conn{
@@ -181,6 +218,72 @@ xi_nub_client* xi_nub_client_new(xi_nub_ctx *ctx, int argc, const char **argv)
     return c;
 }
 
+struct xi_name_object
+{
+    char name[MAXPATHLEN];
+};
+
+struct xi_nub_ticket
+{
+    uint32_t ticket;
+    uint32_t pid;
+    bool is_leader;
+    xi_name_object obj;
+};
+
+static xi_nub_ticket xi_nub_get_ticket(xi_nub_ctx *ctx)
+{
+    xi_name_object obj;
+    const char* profile_path = xi_nub_ctx_get_profile_path(ctx);
+    snprintf(obj.name, sizeof(obj.name), "%s%s", profile_path,
+        PATH_SEPARATOR "semaphore");
+
+    bool is_leader = false;
+    auto f = _open_file(obj.name, file_create_new, file_append);
+    if (f.has_error()) {
+        f = _open_file(obj.name, file_open_existing, file_append);
+    } else {
+        is_leader = true;
+    }
+    uint32_t pid = (uint32_t)_get_processs_id();
+    _write(&f, &pid, sizeof(pid));
+    xi_nub_result off = _get_file_offset(&f);
+    uint32_t ticket = (uint32_t)off.bytes >> 2;
+    _close(&f);
+
+    if (debug) {
+        printf("%s: ticket=%u, is_leader=%u, pid=%u, file=%s\n",
+            __func__, ticket, is_leader, pid, obj.name);
+    }
+
+    return xi_nub_ticket{ticket, pid, is_leader, obj };
+}
+
+static void xi_nub_sleep_on_ticket(xi_nub_ctx *ctx, xi_nub_ticket ticket)
+{
+    char sem_name[16];
+    snprintf(sem_name, sizeof(sem_name), "xi-%u", ticket.pid);
+    xi_nub_platform_semaphore sem = _semaphore_create(sem_name);
+    if (sem.has_error()) {
+        fprintf(stderr, "error: _semaphore_create: error_code=%d\n", sem.error_code());
+        exit(1);
+    }
+    if (debug) {
+        printf("xi_nub_sleep_on_ticket: semaphore=%s *** created ***\n", sem_name);
+    }
+
+    _semaphore_wait(&sem, 15000);
+
+#if defined OS_WINDOWS
+    /* FIXME - add wait to avoid ERROR_PIPE_CONNECTED */
+    _thread_sleep(100);
+#endif
+
+    if (debug) {
+        printf("xi_nub_sleep_on_ticket: semaphore=%s *** woke up ***\n", sem_name);
+    }
+}
+
 void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_cb cb)
 {
 
@@ -192,26 +295,26 @@ void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_c
         printf("xi_nub_client_connect: sock=%s\n", conn.sock.identity());
     }
 
-#if 0
-    if (sock.has_error()) cb(&conn, sock.error_code());
-    else cb(&conn, xi_nub_success);
-#else
-    /*
-     * if we get a socket error, we won't tell client, we are going
-     * to attempt to launch a server
-     */
+    /* if we get a socket error, we try to launch a new server */
     if (conn.sock.has_error())
     {
         _close(&conn.sock);
-        /*
-         * EXPERIMENTAL - launch atomicity semaphores not implemented
-         */
-        char **argv = _get_argv(client->args);
-        int argc = (int)client->args.size();
-        xi_nub_os_process p = _create_process(argc, (const char**)argv);
-        free(argv);
 
-        _thread_sleep(100);
+        /* get an atomic launch ticket, first caller is the leader */
+        xi_nub_ticket ticket = xi_nub_get_ticket(client->ctx);
+
+        /* launch a server if we are the leader */
+        if (ticket.is_leader) {
+            char **argv = _get_argv(client->args);
+            int argc = (int)client->args.size();
+            xi_nub_os_process p = _create_process(argc, (const char**)argv);
+            free(argv);
+        }
+
+        /* wait for server to wake us up */
+        xi_nub_sleep_on_ticket(client->ctx, ticket);
+
+        /* attempt to reconnect */
         conn.sock = client_socket_connect();
         if (conn.sock.has_error()) {
             cb(&conn, conn.sock.error_code());
@@ -221,7 +324,6 @@ void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_c
     } else {
         cb(&conn, xi_nub_success);
     }
-#endif
 }
 
 

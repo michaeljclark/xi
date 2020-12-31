@@ -566,7 +566,7 @@ static void my_nub_client_close_cb(xi_nub_conn *conn, xi_nub_error err)
     mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
 
     if (err) {
-        fprintf(stderr, "error: close(): error_code=%d\n", err);
+        fprintf(stderr, "%s: error: close(): error_code=%d\n", __func__, err);
         return;
     }
 
@@ -581,7 +581,7 @@ static void my_nub_client_read_cb(xi_nub_conn *conn, xi_nub_error err,
     mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
 
     if (err) {
-        fprintf(stderr, "error: read(): error_code=%d\n", err);
+        fprintf(stderr, "%s: error: read(): error_code=%d\n", __func__, err);
         return;
     }
 
@@ -625,7 +625,7 @@ static void my_nub_client_write_cb(xi_nub_conn *conn, xi_nub_error err,
     mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
 
     if (err) {
-        fprintf(stderr, "error: write(): error_code=%d\n", err);
+        fprintf(stderr, "%s: error: write(): error_code=%d\n", __func__, err);
         return;
     }
 
@@ -643,7 +643,7 @@ static void my_nub_client_write_cb(xi_nub_conn *conn, xi_nub_error err,
 static void my_nub_client_connect_cb(xi_nub_conn *conn, xi_nub_error err)
 {
     if (err) {
-        fprintf(stderr, "error: connect(): error_code=%d\n", err);
+        fprintf(stderr, "%s: error: connect(): error_code=%d\n", __func__, err);
         return;
     }
 
@@ -713,7 +713,7 @@ static void my_nub_server_close_cb(xi_nub_conn *conn, xi_nub_error err)
     mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
 
     if (err) {
-        fprintf(stderr, "error: close(): error_code=%d\n", err);
+        fprintf(stderr, "%s: error: close(): error_code=%d\n", __func__, err);
         return;
     }
 
@@ -728,7 +728,7 @@ static void my_nub_server_write_cb(xi_nub_conn *conn, xi_nub_error err,
     mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
 
     if (err) {
-        fprintf(stderr, "error: write(): error_code=%d\n", err);
+        fprintf(stderr, "%s: error: write(): error_code=%d\n", __func__, err);
         return;
     }
 
@@ -746,7 +746,7 @@ static void my_nub_server_read_cb(xi_nub_conn *conn, xi_nub_error err,
     mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
 
     if (err) {
-        fprintf(stderr, "error: read(): error_code=%d\n", err);
+        fprintf(stderr, "%s: error: read(): error_code=%d\n", __func__, err);
         return;
     }
 
@@ -824,7 +824,7 @@ static void my_nub_server_read_cb(xi_nub_conn *conn, xi_nub_error err,
 static void my_nub_server_accept_cb(xi_nub_conn *conn, xi_nub_error err)
 {
     if (err) {
-        fprintf(stderr, "error: accept(): error_code=%d\n", err);
+        fprintf(stderr, "%s: error: accept(): error_code=%d\n", __func__, err);
         return;
     }
 

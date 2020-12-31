@@ -126,15 +126,15 @@ typedef xi_nub_file xi_nub_sock;
 #if defined OS_WINDOWS
 static xi_nub_error os_error_code(DWORD error) {
     switch (error) {
-    case 0:                    return xi_nub_success;
-    case ERROR_INVALID_HANDLE: return xi_nub_einval;
-    case ERROR_FILE_NOT_FOUND:
-    case ERROR_PIPE_BUSY:
-    case ERROR_PIPE_NOT_CONNECTED:
-                               return xi_nub_econnrefused;
-    case ERROR_ALREADY_EXISTS: return xi_nub_eexist;
-    case ERROR_ACCESS_DENIED:  return xi_nub_eacces;
-    default:                   return xi_nub_egeneric;
+    case 0:                        return xi_nub_success;
+    case ERROR_INVALID_HANDLE:     return xi_nub_einval;
+    case ERROR_ALREADY_EXISTS:     return xi_nub_eexist;
+    case ERROR_ACCESS_DENIED:      return xi_nub_eacces;
+    case ERROR_FILE_NOT_FOUND:     return xi_nub_econnrefused;
+    case ERROR_PIPE_BUSY:          return xi_nub_eagain;
+    case ERROR_NO_DATA:
+    case ERROR_PIPE_NOT_CONNECTED: return xi_nub_eio;
+    default:                       return xi_nub_egeneric;
     }
 }
 #endif
@@ -142,13 +142,15 @@ static xi_nub_error os_error_code(DWORD error) {
 #if defined OS_POSIX
 static xi_nub_error os_error_code(int error) {
     switch (error) {
-    case 0:             return xi_nub_success;
+    case 0:                        return xi_nub_success;
     case EBADF:
-    case EINVAL:        return xi_nub_einval;
-    case ECONNREFUSED:  return xi_nub_econnrefused;
-    case EEXIST:        return xi_nub_eexist;
-    case EACCES:        return xi_nub_eacces;
-    default:            return xi_nub_egeneric;
+    case EINVAL:                   return xi_nub_einval;
+    case EEXIST:                   return xi_nub_eexist;
+    case EACCES:                   return xi_nub_eacces;
+    case ECONNREFUSED:             return xi_nub_econnrefused;
+    case EAGAIN:                   return xi_nub_eagain;
+    case EIO:                      return xi_nub_eio;
+    default:                       return xi_nub_egeneric;
     }
 }
 #endif
@@ -164,7 +166,8 @@ struct xi_nub_win32_file : xi_nub_file
     DWORD error;
     char ident[32];
 
-    xi_nub_win32_file() = default;
+    xi_nub_win32_file()
+        : h(INVALID_HANDLE_VALUE), error(0), ident{0} {}
     xi_nub_win32_file(HANDLE h, DWORD error = GetLastError())
         : h(h), error(error) {}
 
@@ -532,7 +535,12 @@ static std::string _executable_path()
 #if defined OS_WINDOWS
 struct xi_nub_os_process
 {
+    PROCESS_INFORMATION pi;
+    DWORD error;
 
+    bool has_error() { return pi.hProcess == INVALID_HANDLE_VALUE; }
+    int os_error() { return error; }
+    xi_nub_error error_code() { return os_error_code(error); }
 };
 #endif
 
@@ -540,7 +548,7 @@ struct xi_nub_os_process
 static xi_nub_os_process _create_process(int argc, const char **argv)
 {
     STARTUPINFOW si = { sizeof(si) };
-    PROCESS_INFORMATION pi;
+    PROCESS_INFORMATION pi { INVALID_HANDLE_VALUE };
 
     if (argc < 1) return xi_nub_os_process{};
 
@@ -561,20 +569,23 @@ static xi_nub_os_process _create_process(int argc, const char **argv)
         cmd_line.append(utf8_to_utf16(s));
     }
 
-    BOOL result = CreateProcessW(
+    CreateProcessW(
         NULL, (LPWSTR)cmd_line.data(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi
     );
 
-    // TODO - add process handles, pid and error to result
-
-    return xi_nub_os_process{};
+    return xi_nub_os_process{ pi, GetLastError() };
 }
 #endif
 
 #if defined OS_POSIX
 struct xi_nub_os_process
 {
+    int pid;
+    int error;
 
+    bool has_error() { return pid == 0; }
+    int os_error() { return error; }
+    xi_nub_error error_code() { return os_error_code(error); }
 };
 #endif
 
@@ -611,15 +622,20 @@ static xi_nub_os_process _create_process(int argc, const char **argv)
         }
      }
 
-    // TODO - add pid and error to result
-
-    return xi_nub_os_process{};
+    return xi_nub_os_process{ pid1, errno };
 }
 #endif
 
 /*
  * filesystem helpers
  */
+
+#if defined OS_WINDOWS
+static bool _delete_file(const char *fname)
+{
+    return DeleteFileW(utf8_to_utf16(fname).c_str());
+}
+#endif
 
 #if defined OS_WINDOWS
 static bool _directory_exists(const char *path)
@@ -634,6 +650,13 @@ static bool _directory_exists(const char *path)
 static bool _make_directory(const char *path)
 {
     return CreateDirectoryW(utf8_to_utf16(path).c_str(), NULL) != 0;
+}
+#endif
+
+#if defined OS_POSIX
+static bool _delete_file(const char *fname)
+{
+    return unlink(fname) == 0;
 }
 #endif
 
@@ -830,7 +853,7 @@ static xi_nub_win32_file _open_file(const char *fname, share_mode smode, int acc
     if (access & file_write) oaccess |= FILE_GENERIC_WRITE;
     if (access & file_append) oaccess |= FILE_APPEND_DATA;
     HANDLE h = CreateFileW(utf8_to_utf16(fname).c_str(), oaccess, 0, NULL,
-                       omode, FILE_FLAG_RANDOM_ACCESS, NULL);
+                       omode, FILE_FLAG_RANDOM_ACCESS | FILE_FLAG_OVERLAPPED, NULL);
     return xi_nub_win32_file(h, GetLastError());
 }
 #endif
@@ -839,25 +862,55 @@ static xi_nub_win32_file _open_file(const char *fname, share_mode smode, int acc
 static xi_nub_result _read(xi_nub_win32_file *file, void *buf, size_t len)
 {
     DWORD nbytes;
-    BOOL ret = ReadFile(file->h, buf, (DWORD)len, &nbytes, NULL);
-    return xi_nub_result{ os_error_code(GetLastError()), ret ? nbytes : -1 };
+    OVERLAPPED o{0};
+    BOOL ret = ReadFile(file->h, buf, (DWORD)len, &nbytes, &o);
+    DWORD error = GetLastError();
+    if (ret) {
+        return xi_nub_result{ os_error_code(error), nbytes };
+    }
+    switch (error) {
+    case ERROR_IO_PENDING:
+        if (GetOverlappedResult(file->h, &o, &nbytes, TRUE)) {
+            return xi_nub_result{ xi_nub_success, (int)o.InternalHigh };
+        }
+        break;
+    default:
+        break;
+    }
+    return xi_nub_result{ os_error_code(error), -1 };
 }
 
 static xi_nub_result _write(xi_nub_win32_file *file, void *buf, size_t len)
 {
     DWORD nbytes;
-    BOOL ret = WriteFile(file->h, buf, (DWORD)len, &nbytes, NULL);
-    return xi_nub_result{ os_error_code(GetLastError()), ret ? nbytes : -1 };
+    OVERLAPPED o{0};
+    BOOL ret = WriteFile(file->h, buf, (DWORD)len, &nbytes, &o);
+    DWORD error = GetLastError();
+    if (ret) {
+        return xi_nub_result{ os_error_code(error), nbytes };
+    }
+    switch (error) {
+    case ERROR_IO_PENDING:
+        if (GetOverlappedResult(file->h, &o, &nbytes, TRUE)) {
+            return xi_nub_result{ xi_nub_success, (int)o.InternalHigh };
+        }
+        break;
+    default:
+        break;
+    }
+    return xi_nub_result{ os_error_code(error), -1 };
 }
 
 static xi_nub_result _disconnect(xi_nub_win32_file *file)
 {
+    SetLastError(0);
     BOOL ret = DisconnectNamedPipe(file->h);
     return xi_nub_result{ os_error_code(GetLastError()), ret ? 0 : -1 };
 }
 
 static xi_nub_result _close(xi_nub_win32_file *file)
 {
+    SetLastError(0);
     BOOL ret = CloseHandle(file->h);
     return xi_nub_result{ os_error_code(GetLastError()), ret ? 0 : -1 };
 }
@@ -969,8 +1022,8 @@ typedef xi_nub_win32_sock xi_nub_platform_sock;
 #if defined OS_WINDOWS
 static xi_nub_platform_sock listen_socket_create()
 {
-    DWORD open_mode = PIPE_ACCESS_DUPLEX;
-    DWORD pipe_mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT;
+    DWORD open_mode = PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED;
+    DWORD pipe_mode = PIPE_READMODE_MESSAGE | PIPE_TYPE_MESSAGE | PIPE_WAIT;
     LPWSTR pipe_name = L"\\\\.\\pipe\\Xi";
     DWORD buf_size = 65536;
 
@@ -995,12 +1048,34 @@ static xi_nub_platform_sock listen_socket_accept(xi_nub_platform_sock l)
      * we only connect one socket and then must create a new pipe
      * to accept subsequent connections
      */
-    int ret = ConnectNamedPipe(l.h, NULL);
-    if (ret || (GetLastError() == ERROR_PIPE_CONNECTED)) {
-        return xi_nub_platform_sock(l.h, GetLastError());
-    } else {
-        return xi_nub_platform_sock(INVALID_HANDLE_VALUE, GetLastError());
+retry:
+    OVERLAPPED o{0};
+    int connected = ConnectNamedPipe(l.h, &o);
+    int error = GetLastError();
+    if (connected) {
+        CloseHandle(o.hEvent);
+        return xi_nub_platform_sock(l.h, error);
     }
+    DWORD nbytes;
+    switch (error) {
+    case ERROR_IO_PENDING:
+        connected = GetOverlappedResult(l.h, &o, &nbytes, TRUE);
+        if (connected) {
+            return xi_nub_platform_sock(l.h, 0);
+        }
+        break;
+    case ERROR_NO_DATA:
+        /* previous connection closed */
+        DisconnectNamedPipe(l.h);
+        goto retry;
+    case ERROR_PIPE_CONNECTED:
+        /* previous connection open */
+        return xi_nub_platform_sock(l.h, 0);
+        break;
+    default:
+        break;
+    }
+    return xi_nub_platform_sock(INVALID_HANDLE_VALUE, error);
 }
 #endif
 
@@ -1012,10 +1087,9 @@ static xi_nub_platform_sock client_socket_connect()
     DWORD buf_size = 65536;
 
     HANDLE h = CreateFileW(pipe_name, GENERIC_READ | GENERIC_WRITE,
-                               0, NULL, OPEN_EXISTING, 0, NULL);
+                               0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
     if (h == INVALID_HANDLE_VALUE)
     {
-        fprintf(stderr, "error: CreateFile(): ret=0x%08x\n", GetLastError());
         return xi_nub_platform_sock(INVALID_HANDLE_VALUE, GetLastError());
     }
 
@@ -1103,12 +1177,10 @@ static xi_nub_platform_sock client_socket_connect()
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
-        fprintf(stderr, "error: socket(): %s\n", strerror(errno));
         return xi_nub_platform_sock(-1, errno);
     }
 
     if (connect(fd, (sockaddr*)(&saddr), saddr_len) < 0) {
-        fprintf(stderr, "error: bind(): %s\n", strerror(errno));
         close(fd);
         return xi_nub_platform_sock(-1, errno);
     }

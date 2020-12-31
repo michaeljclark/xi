@@ -35,6 +35,28 @@ void test_lock()
     	__func__, ticket, is_leader, pid, sem_file);
 }
 
+void test_unlock()
+{
+    char sem_file[MAXPATHLEN];
+    xi_nub_ctx* ctx = xi_nub_ctx_get_root_context();
+    const char* profile_path = xi_nub_ctx_get_profile_path(ctx);
+    snprintf(sem_file, sizeof(sem_file), "%s%s", profile_path,
+        PATH_SEPARATOR "semaphore");
+
+    auto f = _open_file(sem_file, file_open_existing, file_read_write);
+    assert (!f.has_error());
+
+    char buf[1024];
+	xi_nub_result r = _read(&f, buf, sizeof(buf));
+	size_t num_waiters = (size_t)(r.bytes >> 2);
+	uint32_t *p = (uint32_t*)buf;
+	for (size_t i = 0; i < num_waiters; i++) {
+		uint32_t pid = *p++;
+		printf("ticket-%zu: pid=%d\n", i, pid);
+	}
+	_close(&f);
+}
+
 static uint64_t t1, t2, t3, t4;
 static xi_nub_platform_semaphore test_sem1;
 
@@ -82,5 +104,6 @@ void test_sem()
 int main()
 {
 	test_lock();
+	test_unlock();
 	test_sem();
 }
