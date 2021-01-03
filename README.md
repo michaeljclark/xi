@@ -53,3 +53,46 @@ are then used to find tokens in the hash table, which are collated then
 filtered using the boolean _and_ combination of terms. The filter step
 is needed because some token hits will refer to rows that only contain
 a subset of all query terms.
+
+
+## Nubs
+
+_Xi_ supports a concept called _nubs_ which are session process
+activation stubs. _Nubs_ allow a client to create a session peer
+process with a different lifecycle to its own, hence the name _nub_.
+Nubs allow splitting the app into a command-line agent and session
+peer containing some cache, with the session peer process automatically
+started by the command-line tool. Subsequent invocations of the tool will
+connect to a previously created session peer process.
+
+### Xi Unicdoe Nub
+
+_Xi_ uses nubs to create a process that caches the Rabin-Karp indices,
+to allow it to answer queries more quickly because the index has been
+cached. This makes subsequent invocations very fast. Queries in this
+way can be answered in less than a millisecond.
+
+_Example invocation of a search query using a 'nub-client':_
+
+```
+xi -t nub-client blue
+⻘	U+2ed8	CJK RADICAL BLUE
+⾭	U+2fad	KANGXI RADICAL BLUE
+💙	U+1f499	BLUE HEART
+📘	U+1f4d8	BLUE BOOK
+🔵	U+1f535	LARGE BLUE CIRCLE
+🔷	U+1f537	LARGE BLUE DIAMOND
+🔹	U+1f539	SMALL BLUE DIAMOND
+🟦	U+1f7e6	LARGE BLUE SQUARE
+🫐	U+1fad0	BLUEBERRIES
+[nub-client] search = 254μs
+```
+
+### Nub Locking
+
+Nubs use a locking protocol to ensure that only a single process is
+launched. When a nub clients attempt to connect to the server. if there
+is no answer they will create a semaphore, writing its id to a file,
+a leader will be chosen to fork the nub child process and all clients
+will then wait on their semaphore. When server has started, it will
+read the list of semaphores and signal them waking up all of the clients.
