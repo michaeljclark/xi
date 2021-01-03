@@ -491,10 +491,10 @@ static std::string _executable_path()
     /* GetFinalPathNameByHandleW returns total size so use resize pattern
      * and the size returned includes the null pointer so we must subtract. */
     sz = GetFinalPathNameByHandleW(h, fname.data(), (DWORD)fname.size(),
-                                   VOLUME_NAME_NONE);
+                                   VOLUME_NAME_DOS);
     fname.resize(sz);
     sz = GetFinalPathNameByHandleW(h, fname.data(), (DWORD)fname.size(),
-                                   VOLUME_NAME_NONE);
+                                   VOLUME_NAME_DOS);
     CloseHandle(h);
     /* this should not happen */
     if (sz > fname.size()) {
