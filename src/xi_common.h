@@ -1053,7 +1053,6 @@ retry:
     int connected = ConnectNamedPipe(l.h, &o);
     int error = GetLastError();
     if (connected) {
-        CloseHandle(o.hEvent);
         return xi_nub_platform_sock(l.h, error);
     }
     DWORD nbytes;
