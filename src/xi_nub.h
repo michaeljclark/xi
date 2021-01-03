@@ -51,6 +51,7 @@ typedef enum
 	xi_nub_eacces,
 	xi_nub_econnrefused,
 	xi_nub_eagain,
+	xi_nub_enodata,
 	xi_nub_eio,
 	xi_nub_egeneric = 255
 } xi_nub_error;

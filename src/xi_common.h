@@ -132,7 +132,7 @@ static xi_nub_error os_error_code(DWORD error) {
     case ERROR_ACCESS_DENIED:      return xi_nub_eacces;
     case ERROR_FILE_NOT_FOUND:     return xi_nub_econnrefused;
     case ERROR_PIPE_BUSY:          return xi_nub_eagain;
-    case ERROR_NO_DATA:
+    case ERROR_NO_DATA:            return xi_nub_enodata;
     case ERROR_PIPE_NOT_CONNECTED: return xi_nub_eio;
     default:                       return xi_nub_egeneric;
     }
@@ -149,6 +149,7 @@ static xi_nub_error os_error_code(int error) {
     case EACCES:                   return xi_nub_eacces;
     case ECONNREFUSED:             return xi_nub_econnrefused;
     case EAGAIN:                   return xi_nub_eagain;
+    case ENODATA:                  return xi_nub_enodata;
     case EIO:                      return xi_nub_eio;
     default:                       return xi_nub_egeneric;
     }
