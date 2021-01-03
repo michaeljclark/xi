@@ -612,6 +612,9 @@ static xi_nub_os_process _create_process(int argc, const char **argv)
         dup2(stdin_fd, STDIN_FILENO);
         dup2(stdout_fd, STDOUT_FILENO);
         dup2(stderr_fd, STDERR_FILENO);
+        close(stdin_fd);
+        close(stdout_fd);
+        close(stderr_fd);
         setsid();
         pid_t pid2 = fork();
         if (pid2) {
