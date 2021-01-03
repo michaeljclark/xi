@@ -210,6 +210,8 @@ static void xi_nub_wake_all_waiters()
             printf("xi_nub_wake_all_waiters: semaphore=%s *** signal ***\n", sem_name);
         }
         _semaphore_signal(&sem);
+        _semaphore_unlink(sem_name);
+        _semaphore_close(&sem);
     }
     _close(&f);
 
