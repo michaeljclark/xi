@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "stdendian.h"
+
 #define sha256_block_size    64
 #define sha256_hash_size     32
 
@@ -83,25 +85,6 @@ static inline uint32_t ch(uint32_t x, uint32_t y, uint32_t z)
 static inline uint32_t maj(uint32_t x, uint32_t y, uint32_t z)
 {
     return (x & y) ^ ((x ^ y) & z);
-}
-
-static inline uint32_t be32(uint32_t v)
-{
-    typedef uint8_t u8;
-    union { uint8_t a[4]; uint32_t b; } u = {
-        { (u8)(v >> 24), (u8)(v >> 16), (u8)(v >> 8), (u8)(v) }
-    };
-    return u.b;
-}
-
-static inline uint64_t be64(uint64_t v)
-{
-    typedef uint8_t u8;
-    union { uint8_t a[8]; uint64_t b; } u = {
-        { (u8)(v >> 56), (u8)(v >> 48), (u8)(v >> 40), (u8)(v >> 32),
-          (u8)(v >> 24), (u8)(v >> 16), (u8)(v >> 8), (u8)(v) }
-    };
-    return u.b;
 }
 
 static void sha256_transform(sha256_ctx *ctx, const unsigned char *buf)
