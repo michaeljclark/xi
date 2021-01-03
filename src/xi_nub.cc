@@ -17,28 +17,35 @@
  */
 
 #include "xi_common.h"
+#include "sha256.h"
+
+#include <cstdlib>
+#include <cinttypes>
 
 #include <vector>
 #include <algorithm>
 
+using string = std::string;
+template <typename T> using vector = std::vector<T>;
+
 struct xi_nub_ctx
 {
-    std::string user_name;
-    std::string home_path;
-    std::string profile_path;
+    string user_name;
+    string home_path;
+    string profile_path;
     void *user_data;
 };
 
 struct xi_nub_server
 {
     xi_nub_ctx *ctx;
-    std::vector<string> args;
+    vector<string> args;
 };
 
 struct xi_nub_client
 {
     xi_nub_ctx *ctx;
-    std::vector<string> args;
+    vector<string> args;
 };
 
 struct xi_nub_conn
@@ -69,7 +76,7 @@ static void xi_nub_find_dirs(xi_nub_ctx *ctx)
     char profile_path_tmp[MAXPATHLEN];
     ctx->user_name = windows_getenv("USERNAME");
     ctx->home_path = windows_getenv("HOMEPATH");
-    std::string appdata =  windows_getenv("APPDATA");
+    string appdata =  windows_getenv("APPDATA");
     snprintf(profile_path_tmp, MAX_PATH, profile_template, appdata.c_str());
     ctx->profile_path = profile_path_tmp;
 }
@@ -92,9 +99,9 @@ static void xi_nub_find_dirs(xi_nub_ctx *ctx)
  * convert command-line argument to a vector
  */
 
-static std::vector<string> _get_args(int argc, const char **argv)
+static vector<string> _get_args(int argc, const char **argv)
 {
-    std::vector<string> args;
+    vector<string> args;
     for (size_t i = 0; i < argc; i++) {
         if (i == 0 && strcmp(argv[0], "<self>") == 0) {
             args.push_back(_executable_path());
@@ -105,7 +112,7 @@ static std::vector<string> _get_args(int argc, const char **argv)
     return args;
 }
 
-static char** _get_argv(std::vector<string> vec)
+static char** _get_argv(vector<string> vec)
 {
     size_t data_size = 0;
     for (auto &s : vec) {
@@ -123,6 +130,41 @@ static char** _get_argv(std::vector<string> vec)
         data += vec[i].size() + 1;
     }
     return (char**)p;
+}
+
+
+struct _argument_hash { unsigned char hash[32]; };
+
+_argument_hash _get_args_hash(vector<string> vec)
+{
+    _argument_hash ah;
+    sha256_ctx ctx;
+
+    sha256_init(&ctx);
+    for (auto &s : vec) {
+        sha256_update(&ctx, s.c_str(), s.size() + 1);
+    }
+    sha256_final(&ctx, ah.hash);
+
+    return ah;
+}
+
+string _to_hex(const unsigned char *in, size_t in_len)
+{
+    size_t o = 0, l = in_len << 1;
+    char *buf = (char*)alloca(l + 1);
+    for (size_t i = 0, o = 0; i < in_len; i++) {
+        o+= snprintf(buf+o, l + 1 - o, "%02" PRIx8, in[i]);
+    }
+    return string(buf, l);
+}
+
+string _get_arg_addr(vector<string> vec)
+{
+    _argument_hash ah = _get_args_hash(vec);
+    string addr = "Xi-";
+    addr.append(_to_hex(ah.hash, sizeof(ah.hash)));
+    return addr;
 }
 
 
@@ -176,7 +218,8 @@ static void xi_nub_wake_all_waiters()
 
 void xi_nub_server_accept(xi_nub_server *server, int nthreads, xi_nub_accept_cb cb)
 {
-    xi_nub_platform_sock listen = listen_socket_create();
+    string pipe_addr = _get_arg_addr(server->args);
+    xi_nub_platform_sock listen = listen_socket_create(pipe_addr.c_str());
     if (debug) {
         printf("xi_nub_server_accept: listening sock=%s\n", listen.identity());
     }
@@ -286,9 +329,10 @@ static void xi_nub_sleep_on_ticket(xi_nub_ctx *ctx, xi_nub_ticket ticket)
 
 void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_cb cb)
 {
+    string pipe_addr = _get_arg_addr(client->args);
 
     xi_nub_conn conn{
-        client->ctx, NULL, client, client_socket_connect()
+        client->ctx, NULL, client, client_socket_connect(pipe_addr.c_str())
     };
 
     if (debug) {
@@ -315,7 +359,7 @@ void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_c
         xi_nub_sleep_on_ticket(client->ctx, ticket);
 
         /* attempt to reconnect */
-        conn.sock = client_socket_connect();
+        conn.sock = client_socket_connect(pipe_addr.c_str());
         if (conn.sock.has_error()) {
             cb(&conn, conn.sock.error_code());
         } else {

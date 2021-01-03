@@ -65,6 +65,28 @@ peer containing some cache, with the session peer process automatically
 started by the command-line tool. Subsequent invocations of the tool will
 connect to a previously created session peer process.
 
+## Nub addresses
+
+Nub addresses are composed using a SHA-256 hash of the components of
+the argument vector including the terminating zero of each C string.
+`<self>` is substituted for the executable name. The SHA-256 hash is
+computed after any substitutions so that unique binary images have
+unique addresses.
+
+The following initialization code:
+
+```
+const char* args[] = { "<self>", "nub-server" };
+xi_nub_server *c = xi_nub_server_new(ctx, 2, args);
+```
+
+Results in the following nub addresses:
+
+|operating system|example nub address|
+|---|---|
+|Windows pipe|`\\.\pipe\Xi-1345c60535958c16a94dbbde8dfdbf86b260670a9afb9ca1b9de4747ae309234`|
+|UNIX socket|`@Xi-e21c0ba1c40d379e35292716e290aa6761184e9fba5f30b274636d51b15a2688`|
+
 ### Xi Unicdoe Nub
 
 _Xi_ uses nubs to create a process that caches the Rabin-Karp indices,

@@ -1020,17 +1020,18 @@ typedef xi_nub_win32_sock xi_nub_platform_sock;
 #endif
 
 #if defined OS_WINDOWS
-static xi_nub_platform_sock listen_socket_create()
+static xi_nub_platform_sock listen_socket_create(const char *pipe_path)
 {
     DWORD open_mode = PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED;
     DWORD pipe_mode = PIPE_READMODE_MESSAGE | PIPE_TYPE_MESSAGE | PIPE_WAIT;
-    LPWSTR pipe_name = L"\\\\.\\pipe\\Xi";
     DWORD buf_size = 65536;
 
-    HANDLE h = CreateNamedPipeW(pipe_name, open_mode, pipe_mode,
-                                    PIPE_UNLIMITED_INSTANCES,
-                                    buf_size, buf_size,
-                                    NMPWAIT_USE_DEFAULT_WAIT, NULL);
+    std::wstring wpipe_path = L"\\\\.\\pipe\\";
+    wpipe_path.append(utf8_to_utf16(pipe_path));
+
+    HANDLE h = CreateNamedPipeW(wpipe_path.c_str(), open_mode, pipe_mode,
+                                PIPE_UNLIMITED_INSTANCES, buf_size, buf_size,
+                                NMPWAIT_USE_DEFAULT_WAIT, NULL);
     if (h == INVALID_HANDLE_VALUE)
     {
         fprintf(stderr, "error: CreateNamedPipe(): ret=0x%08x\n", GetLastError());
@@ -1079,14 +1080,15 @@ retry:
 #endif
 
 #if defined OS_WINDOWS
-static xi_nub_platform_sock client_socket_connect()
+static xi_nub_platform_sock client_socket_connect(const char *pipe_path)
 {
-    LPWSTR pipe_name = L"\\\\.\\pipe\\Xi";
+    std::wstring wpipe_path = L"\\\\.\\pipe\\";
+    wpipe_path.append(utf8_to_utf16(pipe_path));
 
     DWORD buf_size = 65536;
 
-    HANDLE h = CreateFileW(pipe_name, GENERIC_READ | GENERIC_WRITE,
-                               0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+    HANDLE h = CreateFileW(wpipe_path.c_str(), GENERIC_READ | GENERIC_WRITE,
+                           0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
     if (h == INVALID_HANDLE_VALUE)
     {
         return xi_nub_platform_sock(INVALID_HANDLE_VALUE, GetLastError());
@@ -1106,16 +1108,15 @@ typedef xi_nub_unix_sock xi_nub_platform_sock;
 #endif
 
 #if defined OS_POSIX
-static xi_nub_platform_sock listen_socket_create()
+static xi_nub_platform_sock listen_socket_create(const char *pipe_path)
 {
-    const char *pipe_path = "Xi";
     sockaddr_un saddr;
 
     memset(&saddr, 0, sizeof(saddr));
     saddr.sun_family = AF_UNIX;
 
     size_t saddr_len = offsetof(sockaddr_un,sun_path) + strlen(pipe_path) + 1;
-    strncpy(saddr.sun_path + 1, pipe_path, strlen(pipe_path));
+    memcpy(saddr.sun_path + 1, pipe_path, strlen(pipe_path) + 1);
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -1163,16 +1164,15 @@ static xi_nub_platform_sock listen_socket_accept(xi_nub_platform_sock l)
 #endif
 
 #if defined OS_POSIX
-static xi_nub_platform_sock client_socket_connect()
+static xi_nub_platform_sock client_socket_connect(const char *pipe_path)
 {
-    const char *pipe_path = "Xi";
     sockaddr_un saddr;
 
     memset(&saddr, 0, sizeof(saddr));
     saddr.sun_family = AF_UNIX;
 
     size_t saddr_len = offsetof(sockaddr_un,sun_path) + strlen(pipe_path) + 1;
-    strncpy(saddr.sun_path + 1, pipe_path, strlen(pipe_path));
+    memcpy(saddr.sun_path + 1, pipe_path, strlen(pipe_path) + 1);
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
