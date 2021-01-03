@@ -452,7 +452,7 @@ struct mynub_conn
 
     struct span { void *data; size_t length; };
 
-    uint8_t buf[buf_size];
+    char buf[buf_size];
     size_t offset;
     size_t length;
 
@@ -501,7 +501,7 @@ size_t mynub_conn::write_string(const char *s, size_t len)
     memcpy(&buf[offset], s, len);
     if (debug_enabled) {
         printf("write_string: offset=%zu, len=%zu, value=\"%s\"\n",
-            offset, len, std::string((const char*)&buf[offset], len).c_str());
+            offset, len, string(&buf[offset], len).c_str());
     }
     offset += len;
     return len + ret;
@@ -530,7 +530,7 @@ size_t mynub_conn::read_string(char *s, size_t buf_len, size_t *str_len)
     memcpy(s, &buf[offset], len64);
     if (debug_enabled) {
         printf("read_string: offset=%zu, len=%zu, value=\"%s\"\n",
-             offset, len64,std::string((const char*)&buf[offset], len64).c_str());
+             offset, len64, string(&buf[offset], len64).c_str());
     }
     offset += len64;
     if (str_len) *str_len = len64;
@@ -606,7 +606,7 @@ static void my_nub_client_read_cb(xi_nub_conn *conn, xi_nub_error err,
         myconn->read_int32(&codepoint);
         d.Code = codepoint;
         myconn->read_string(str_buf, sizeof(str_buf), &str_len);
-        d.Name = std::string(str_buf, str_len);
+        d.Name = string(str_buf, str_len);
     }
 
     /* print response */
@@ -761,7 +761,7 @@ static void my_nub_server_read_cb(xi_nub_conn *conn, xi_nub_error err,
     size_t str_len = 0;
     char str_buf[1024];
     myconn->read_string(str_buf, sizeof(str_buf), &str_len);
-    std::string request(str_buf, str_len);
+    string request(str_buf, str_len);
 
     /* get index */
     xi_nub_ctx *ctx = xi_nub_conn_get_context(conn);

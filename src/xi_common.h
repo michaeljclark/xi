@@ -65,6 +65,10 @@
 
 #include "xi_nub.h"
 
+using string = std::string;
+using wstring = std::wstring;
+template <typename T> using vector = std::vector<T>;
+
 #if !defined MAXPATHLEN && defined MAX_PATH
 #define MAXPATHLEN MAX_PATH
 #endif
@@ -222,9 +226,6 @@ typedef xi_nub_unix_file xi_nub_unix_sock;
 /*
  * utf8 <-> utf16 string conversion
  */
-
-using string = std::string;
-using wstring = std::wstring;
 
 #if defined OS_WINDOWS
 static string utf16_to_utf8(const wstring w)
@@ -467,10 +468,9 @@ static bool _thread_sleep(int millis)
  */
 
 #if defined OS_WINDOWS
-static std::string _executable_path()
+static string _executable_path()
 {
-    //std::wstring mname, fname;
-    std::vector<wchar_t> mname, fname;
+    vector<wchar_t> mname, fname;
     DWORD sz;
     HANDLE h;
 
@@ -486,7 +486,7 @@ static std::string _executable_path()
     /* open executable to resolve the canonical path */
     h = CreateFileW(mname.data(), 0, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (h == INVALID_HANDLE_VALUE) {
-        return utf16_to_utf8(std::wstring(mname.data(), mname.size()));
+        return utf16_to_utf8(wstring(mname.data(), mname.size()));
     }
 
     /* GetFinalPathNameByHandleW returns total size so use resize pattern
@@ -499,18 +499,18 @@ static std::string _executable_path()
     CloseHandle(h);
     /* this should not happen */
     if (sz > fname.size()) {
-        return utf16_to_utf8(std::wstring(mname.data(), mname.size()));
+        return utf16_to_utf8(wstring(mname.data(), mname.size()));
     } else {
-        return utf16_to_utf8(std::wstring(fname.data(), fname.size() - 1));
+        return utf16_to_utf8(wstring(fname.data(), fname.size() - 1));
     }
 }
 #endif
 
 #if defined OS_MACOS
-static std::string _executable_path()
+static string _executable_path()
 {
     uint32_t sz;
-    std::string path;
+    string path;
 
     assert(_NSGetExecutablePath(NULL, &sz) == -1);
     data.resize(sz);
@@ -521,11 +521,11 @@ static std::string _executable_path()
 #endif
 
 #if defined OS_LINUX
-static std::string _executable_path()
+static string _executable_path()
 {
     char *mname = (char*)alloca(MAXPATHLEN);
     ssize_t ret = readlink("/proc/self/exe", mname, MAXPATHLEN);
-    return (ret > 0) ? std::string(mname, ret) : std::string();
+    return (ret > 0) ? string(mname, ret) : string();
 }
 #endif
 
@@ -559,12 +559,12 @@ static xi_nub_os_process _create_process(int argc, const char **argv)
         }
     }
 
-    std::wstring cmd_line;
+    wstring cmd_line;
     for (size_t i = 0; i < argc; i++) {
-        std::string s;
+        string s;
         bool has_space = strchr(argv[i], ' ') != NULL;
         if (has_space) s.append("\"");
-        s.append(std::string(argv[i]));
+        s.append(string(argv[i]));
         if (has_space) s.append("\"");
         if (i > 0) cmd_line.append(1, ' ');
         cmd_line.append(utf8_to_utf16(s));
@@ -681,10 +681,10 @@ static bool _make_directory(const char *path)
 #endif
 
 #if defined OS_WINDOWS
-static std::string windows_getenv(const char *name)
+static string windows_getenv(const char *name)
 {
     size_t len;
-    std::string s;
+    string s;
     getenv_s(&len, NULL, 0, name);
     s.resize(len);
     getenv_s(&len, s.data(), len, name);
@@ -1030,7 +1030,7 @@ static xi_nub_platform_sock listen_socket_create(const char *pipe_path)
     DWORD pipe_mode = PIPE_READMODE_MESSAGE | PIPE_TYPE_MESSAGE | PIPE_WAIT;
     DWORD buf_size = 65536;
 
-    std::wstring wpipe_path = L"\\\\.\\pipe\\";
+    wstring wpipe_path = L"\\\\.\\pipe\\";
     wpipe_path.append(utf8_to_utf16(pipe_path));
 
     HANDLE h = CreateNamedPipeW(wpipe_path.c_str(), open_mode, pipe_mode,
@@ -1086,7 +1086,7 @@ retry:
 #if defined OS_WINDOWS
 static xi_nub_platform_sock client_socket_connect(const char *pipe_path)
 {
-    std::wstring wpipe_path = L"\\\\.\\pipe\\";
+    wstring wpipe_path = L"\\\\.\\pipe\\";
     wpipe_path.append(utf8_to_utf16(pipe_path));
 
     DWORD buf_size = 65536;
