@@ -114,22 +114,18 @@ static vector<string> _get_args(int argc, const char **argv)
 
 static char** _get_argv(vector<string> vec)
 {
-    size_t data_size = 0;
-    for (auto &s : vec) {
-        data_size += s.size() + 1;
-    }
-    size_t argc = vec.size();
-    size_t array_size = (argc + 1) * sizeof(intptr_t);
-    char *p = (char*)malloc(array_size + data_size);
-    memset(p, 0, array_size + data_size);
-    char *data = (char*)p + array_size;
-    char **arr = (char **)p;
-    for (size_t i = 0; i < argc; i++) {
+    size_t alloc_size = (vec.size() + 1) * sizeof(char*);
+    for (auto &s : vec) alloc_size += s.size() + 1;
+    char **arr = (char **)malloc(alloc_size);
+    char *data = (char*)&arr[vec.size() + 1];
+    for (size_t i = 0; i < vec.size(); i++) {
         arr[i] = data;
         memcpy(data, vec[i].data(), vec[i].size());
+        data[vec[i].size()] = 0;
         data += vec[i].size() + 1;
     }
-    return (char**)p;
+    arr[vec.size()] = 0;
+    return (char**)arr;
 }
 
 
