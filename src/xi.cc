@@ -840,10 +840,32 @@ static void my_nub_server_req_read_cb(xi_nub_conn *conn, xi_nub_error err,
         }
     }
 
+    /*
+     * calculate number of results that fit response buffer.
+     *
+     * currently we don't support cursors or anything fancy, rather the
+     * results are truncated to fit the response buffer. it would be
+     * relatively easy to add a start row to the request, and methods
+     * to return just the count of the results. at that point we could
+     * start using sqlite with the FTS5 (full-text search) extension.
+     */
+    size_t nr = 0, rsz = sizeof(int64_t);
+    while (nr < r.size()) {
+        /* presently we calculate response size manually, but ideally
+         * should be done with a serialization/deserialization library.
+         *
+         * <codepoint:int32> <string.length:int64> <string.data.int8>
+         */
+        size_t isz = sizeof(int32_t) + sizeof(int64_t) + r[nr].Name.size();
+        if (rsz + isz > sizeof(myconn->buf)) break;
+        rsz += isz;
+        nr++;
+    }
+
     /* write response */
     myconn->reset();
-    myconn->write_int64((int64_t)r.size());
-    for (size_t i = 0; i < r.size(); i++) {
+    myconn->write_int64(nr);
+    for (size_t i = 0; i < nr; i++) {
         myconn->write_int32((int32_t)r[i].Code);
         myconn->write_string(r[i].Name.data(), r[i].Name.size());
     }
