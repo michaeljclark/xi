@@ -22,6 +22,7 @@
 #include <cstring>
 #include <cerrno>
 #include <cctype>
+#include <cinttypes>
 
 #include <map>
 #include <set>
@@ -529,7 +530,7 @@ size_t mynub_conn::read_string(char *s, size_t buf_len, size_t *str_len)
     if ((size_t)len64 > buf_len) len64 = buf_len;
     memcpy(s, &buf[offset], len64);
     if (debug_enabled) {
-        printf("read_string: offset=%zu, len=%zu, value=\"%s\"\n",
+        printf("read_string: offset=%zu, len=%" PRIu64 ", value=\"%s\"\n",
              offset, len64, string(&buf[offset], len64).c_str());
     }
     offset += len64;

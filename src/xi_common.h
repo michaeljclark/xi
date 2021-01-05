@@ -37,7 +37,7 @@
 #define OS_POSIX
 #endif
 
-#if defined OS_MAX
+#if defined OS_MACOS
 #include <mach-o/dyld.h>
 #endif
 
@@ -434,10 +434,17 @@ static bool _semaphore_unlink(const char *name)
 }
 #endif
 
-#if defined OS_POSIX
+#if defined OS_POSIX && defined OS_MACOS
 static bool _semaphore_wait(xi_nub_unix_semaphore *s, int millis)
 {
-    struct timespec ta, t1, t2 = { millis / 1000, (millis % 1000) * 1000000 };
+    int ret = sem_wait(s->sem);
+    return (ret == 0);
+}
+#endif
+
+#if defined OS_POSIX && !defined OS_MACOS
+static bool _semaphore_wait(xi_nub_unix_semaphore *s, int millis)
+{    struct timespec ta, t1, t2 = { millis / 1000, (millis % 1000) * 1000000 };
     clock_gettime(CLOCK_REALTIME, &t1);
     ta.tv_sec = t1.tv_sec+t2.tv_sec + (t1.tv_nsec+t2.tv_nsec) / 1000000000ul;
     ta.tv_nsec = (t1.tv_nsec+t2.tv_nsec) % 1000000000ul;
@@ -513,7 +520,7 @@ static string _executable_path()
     string path;
 
     assert(_NSGetExecutablePath(NULL, &sz) == -1);
-    data.resize(sz);
+    path.resize(sz);
     assert(_NSGetExecutablePath(path.data(), &sz) == 0);
 
     return path;
