@@ -908,6 +908,7 @@ static xi_nub_result _write(xi_nub_win32_file *file, void *buf, size_t len)
 static xi_nub_result _disconnect(xi_nub_win32_file *file)
 {
     SetLastError(0);
+    //_thread_sleep(100); /* FIXME - add wait to avoid ERROR_PIPE_NOT_CONNECTED */
     BOOL ret = DisconnectNamedPipe(file->h);
     return xi_nub_result{ os_error_code(GetLastError()), ret ? 0 : -1 };
 }
