@@ -50,12 +50,11 @@ template <typename K,typename V> using map = std::map<K,V>;
 
 static const char* unicode_data_file = "data/13.0.0/UnicodeData.txt";
 static bool help_text = false;
-static bool nub_client = false;
+static bool standalone_search = false;
 static bool nub_server = false;
 static bool debug_enabled = false;
 static bool timings_enabled = false;
 static bool optimized_search = true;
-vector<string> client_search_terms;
 vector<string> unicode_search_terms;
 string unicode_numeric_term;
 
@@ -669,7 +668,7 @@ static void my_nub_client_connect_cb(xi_nub_conn *conn, xi_nub_error err)
     xi_nub_conn_set_user_data(conn, myconn);
 
     /* prepare request */
-    string request = join(client_search_terms, " ", 0, client_search_terms.size());
+    string request = join(unicode_search_terms, " ", 0, unicode_search_terms.size());
 
     /* debug print request */
     if (debug_enabled) printf("request: %s\n", request.c_str());
@@ -808,7 +807,7 @@ static void my_nub_server_req_read_cb(xi_nub_conn *conn, xi_nub_error err,
         index_rabin_karp(state->index, state->tokens);
         const auto t3 = high_resolution_clock::now();
 
-        if (debug_enabled)
+        if (timings_enabled)
         {
             const auto t3 = high_resolution_clock::now();
             auto tl = duration_cast<nanoseconds>(t2 - t1).count();
@@ -820,14 +819,19 @@ static void my_nub_server_req_read_cb(xi_nub_conn *conn, xi_nub_error err,
 
     /* perform request */
     vector<string> terms = split(request, " ");
+    vector<unicode_data> r;
     const auto t1 = high_resolution_clock::now();
-    vector<unicode_data> r = do_search_rabin_karp(state->data, state->tokens,
-        state->index, split(request, " "));
+    if (optimized_search) {
+        r = do_search_rabin_karp(state->data, state->tokens, state->index, terms);
+    } else {
+        r = do_search_brute_force(state->data, state->tokens, terms);
+    }
     const auto t2 = high_resolution_clock::now();
     auto ts = duration_cast<nanoseconds>(t2 - t1).count();
     if (timings_enabled)
     {
-        printf("[Rabin-Karp] search = %.fμs\n", ts / 1e3);
+        printf("[%s] search = %.fμs\n",
+            (optimized_search ? "Rabin-Karp" : "Brute-Force"), ts / 1e3);
     }
 
     /* debug print request and response */
@@ -909,6 +913,19 @@ static void do_nub_server()
 }
 
 /*
+ * stand alone client
+ */
+
+static void do_standalone_client()
+{
+    if (optimized_search) {
+        do_print_results(do_search_rabin_karp(unicode_search_terms));
+    } else {
+        do_print_results(do_search_brute_force(unicode_search_terms));
+    }
+}
+
+/*
  * command line options
  */
 
@@ -927,15 +944,12 @@ static void print_help(int argc, char **argv)
         "  unicode greek letter mu      # search for 'greek', letter' and 'mu'\n"
         "  unicode mathematical mu      # search for 'mathematical' and 'mu'\n"
         "\n"
-        "Experimental:\n"
-        "  nub-client [<term>]+         perform search on nub server\n"
-        "  nub-server                   start nub server on local socket\n"
-        "\n"
         "Options:\n"
         "  -u, --data-file <name>       unicode data file\n"
         "  -d, --debug                  enable search debug\n"
         "  -t, --timings                enable search timings\n"
         "  -x, --brute-force            disable search optimization\n"
+        "  -s, --stand-alone            run in stand-alone mode\n"
         "  -h, --help                   command line help\n",
         argv[0]);
 }
@@ -956,19 +970,6 @@ static bool match_option(const char *arg, const char *opt, const char *longopt)
 static bool match_command(const char *arg, const char *cmd)
 {
     return strcmp(arg, cmd) == 0;
-}
-
-static bool parse_nub_client(int argc, char **argv)
-{
-    if (argc < 2) {
-        fprintf(stderr, "error: unicode search missing terms\n");
-        return false;
-    }
-    int i = 1;
-    while (i < argc) {
-        client_search_terms.push_back(argv[i++]);
-    }
-    return (nub_client = true);
 }
 
 static bool parse_nub_server(int argc, char **argv)
@@ -1016,6 +1017,9 @@ static bool parse_options(int argc, char **argv)
         } else if (match_option(argv[i], "-t", "--timings")) {
             timings_enabled = true;
             i++;
+        } else if (match_option(argv[i], "-s", "--stand-alone")) {
+            standalone_search = true;
+            i++;
         } else if (match_option(argv[i], "-x", "--brute-force")) {
             optimized_search = false;
             i++;
@@ -1028,8 +1032,6 @@ static bool parse_options(int argc, char **argv)
 
     if (i >= argc) {
         fprintf(stderr, "error: expecting command\n");
-    } else if (match_command(argv[i], "nub-client")) {
-        return parse_nub_client(argc-i, argv+i);
     } else if (match_command(argv[i], "nub-server")) {
         return parse_nub_server(argc-i, argv+i);
     } else if (match_command(argv[i], "unicode")) {
@@ -1055,20 +1057,17 @@ int main(int argc, char **argv)
     }
 
     if (unicode_search_terms.size()) {
-        if (optimized_search) {
-            do_print_results(do_search_rabin_karp(unicode_search_terms));
+        if (standalone_search) {
+            do_standalone_client();
         } else {
-            do_print_results(do_search_brute_force(unicode_search_terms));
+            do_nub_client();
         }
     }
     if (unicode_numeric_term.size()) {
         do_print_results(do_codepoint_lookup(unicode_numeric_term));
     }
 
-    if (nub_client) {
-        do_nub_client();
-    }
-    else if (nub_server) {
+    if (nub_server) {
         do_nub_server();
     }
 }
