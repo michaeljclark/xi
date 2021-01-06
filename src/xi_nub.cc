@@ -222,6 +222,12 @@ void xi_nub_server_accept(xi_nub_server *server, int nthreads, xi_nub_accept_cb 
         printf("xi_nub_server_accept: listening sock=%s\n", listen.identity());
     }
 
+    if (listen.has_error()) {
+        fprintf(stderr, "error: listen_socket_create failed: error=%d\n",
+            listen.error_code());
+        exit(1);
+    }
+
     xi_nub_wake_all_waiters();
 
     for (;;) {
