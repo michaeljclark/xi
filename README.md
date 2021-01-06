@@ -95,7 +95,7 @@ Results in the following nub addresses:
 |Windows pipe|`\\.\pipe\Xi-1345c60535958c16a94dbbde8dfdbf86b260670a9afb9ca1b9de4747ae309234`|
 |UNIX socket|`@Xi-e21c0ba1c40d379e35292716e290aa6761184e9fba5f30b274636d51b15a2688`|
 
-### Xi Unicdoe Nub
+### Xi Unicode Nub
 
 _Xi_ uses nubs to create a process that caches the Rabin-Karp indices,
 to allow it to answer queries more quickly because the index has been
