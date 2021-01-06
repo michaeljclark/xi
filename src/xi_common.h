@@ -134,7 +134,8 @@ static xi_nub_error os_error_code(DWORD error) {
     case ERROR_INVALID_HANDLE:     return xi_nub_einval;
     case ERROR_ALREADY_EXISTS:     return xi_nub_eexist;
     case ERROR_ACCESS_DENIED:      return xi_nub_eacces;
-    case ERROR_FILE_NOT_FOUND:     return xi_nub_econnrefused;
+    case ERROR_FILE_NOT_FOUND:     return xi_nub_enoent;
+    case ERROR_CONNECTION_REFUSED: return xi_nub_econnrefused;
     case ERROR_PIPE_BUSY:          return xi_nub_eagain;
     case ERROR_NO_DATA:            return xi_nub_enodata;
     case ERROR_PIPE_NOT_CONNECTED: return xi_nub_eio;
@@ -151,6 +152,7 @@ static xi_nub_error os_error_code(int error) {
     case EINVAL:                   return xi_nub_einval;
     case EEXIST:                   return xi_nub_eexist;
     case EACCES:                   return xi_nub_eacces;
+    case ENOENT:                   return xi_nub_enoent;
     case ECONNREFUSED:             return xi_nub_econnrefused;
     case EAGAIN:                   return xi_nub_eagain;
     case ENODATA:                  return xi_nub_enodata;
@@ -1119,16 +1121,37 @@ static xi_nub_platform_sock client_socket_connect(const char *pipe_path)
 typedef xi_nub_unix_sock xi_nub_platform_sock;
 #endif
 
+#if defined OS_MACOS
+static size_t _unix_pipe_address(sockaddr_un *saddr, const char *pipe_path)
+{
+    xi_nub_ctx *ctx = xi_nub_ctx_get_root_context();
+    const char *profile = xi_nub_ctx_get_profile_path(ctx);
+
+    memset(saddr, 0, sizeof(*saddr));
+    saddr->sun_family = AF_UNIX;
+    strncpy(saddr->sun_path, profile, sizeof(saddr->sun_path));
+    strncat(saddr->sun_path, "/", sizeof(saddr->sun_path)-strlen(profile));
+    strncat(saddr->sun_path, pipe_path, sizeof(saddr->sun_path)-strlen(profile)-1);
+
+    return strlen(saddr->sun_path);
+}
+#elif defined OS_POSIX
+static size_t _unix_pipe_address(sockaddr_un *saddr, const char *pipe_path)
+{
+    memset(saddr, 0, sizeof(*saddr));
+    saddr->sun_family = AF_UNIX;
+    memcpy(saddr->sun_path + 1, pipe_path, strlen(pipe_path) + 1);
+
+    return offsetof(sockaddr_un,sun_path) + strlen(pipe_path) + 1;
+}
+#endif
+
 #if defined OS_POSIX
 static xi_nub_platform_sock listen_socket_create(const char *pipe_path)
 {
     sockaddr_un saddr;
 
-    memset(&saddr, 0, sizeof(saddr));
-    saddr.sun_family = AF_UNIX;
-
-    size_t saddr_len = offsetof(sockaddr_un,sun_path) + strlen(pipe_path) + 1;
-    memcpy(saddr.sun_path + 1, pipe_path, strlen(pipe_path) + 1);
+    size_t saddr_len = _unix_pipe_address(&saddr, pipe_path);
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -1180,11 +1203,7 @@ static xi_nub_platform_sock client_socket_connect(const char *pipe_path)
 {
     sockaddr_un saddr;
 
-    memset(&saddr, 0, sizeof(saddr));
-    saddr.sun_family = AF_UNIX;
-
-    size_t saddr_len = offsetof(sockaddr_un,sun_path) + strlen(pipe_path) + 1;
-    memcpy(saddr.sun_path + 1, pipe_path, strlen(pipe_path) + 1);
+    size_t saddr_len = _unix_pipe_address(&saddr, pipe_path);
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
