@@ -21,6 +21,14 @@ xi unicode greek letter mu      # search for 'greek', letter' and 'mu'
 xi unicode mathematical mu      # search for 'mathematical' and 'mu'
 ```
 
+### Operating Systems
+
+_Xi_ has been tested on the following operating systems:
+
+- Windows 10 20H2
+- Ubuntu 20.04 LTS
+- macOS catalina 10.15.7
+
 ## Build Instructions
 
 ```
