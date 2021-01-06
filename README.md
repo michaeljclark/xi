@@ -102,10 +102,10 @@ to allow it to answer queries more quickly because the index has been
 cached. This makes subsequent invocations very fast. Queries in this
 way can be answered in less than a millisecond.
 
-_Example invocation of a search query using a 'nub-client':_
+_Example invocation of a search query:_
 
 ```
-xi -t nub-client blue
+xi -t unicode blue
 ⻘	U+2ed8	CJK RADICAL BLUE
 ⾭	U+2fad	KANGXI RADICAL BLUE
 💙	U+1f499	BLUE HEART
