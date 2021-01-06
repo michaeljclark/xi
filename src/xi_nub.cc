@@ -447,6 +447,11 @@ void xi_nub_init(xi_nub_ctx *ctx)
                 ctx->profile_path.c_str());
         }
     }
+
+#if defined OS_POSIX
+    /* install handler to cleanup on exit */
+    _install_signal_handler();
+#endif
 }
 
 xi_nub_ctx* xi_nub_ctx_get_root_context()

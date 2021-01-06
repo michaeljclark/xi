@@ -18,6 +18,7 @@
 
 #include <cstdio>
 #include <cstddef>
+#include <csignal>
 #include <cerrno>
 
 #include <string>
@@ -1122,18 +1123,15 @@ typedef xi_nub_unix_sock xi_nub_platform_sock;
 #endif
 
 #if defined OS_MACOS
-static size_t _unix_pipe_address(sockaddr_un *saddr, const char *pipe_path)
+static size_t _unix_pipe_address(sockaddr_un *saddr, const char *path)
 {
     xi_nub_ctx *ctx = xi_nub_ctx_get_root_context();
     const char *profile = xi_nub_ctx_get_profile_path(ctx);
 
     memset(saddr, 0, sizeof(*saddr));
     saddr->sun_family = AF_UNIX;
-    strncpy(saddr->sun_path, profile, sizeof(saddr->sun_path));
-    strncat(saddr->sun_path, "/", sizeof(saddr->sun_path)-strlen(profile));
-    strncat(saddr->sun_path, pipe_path, sizeof(saddr->sun_path)-strlen(profile)-1);
-
-    return strlen(saddr->sun_path);
+    return snprintf(saddr->sun_path, sizeof(saddr->sun_path),
+                    "%s/%s", profile, path);
 }
 #elif defined OS_POSIX
 static size_t _unix_pipe_address(sockaddr_un *saddr, const char *pipe_path)
@@ -1146,12 +1144,64 @@ static size_t _unix_pipe_address(sockaddr_un *saddr, const char *pipe_path)
 }
 #endif
 
+
+/*
+ * list of files to delete on exit
+ */
+
+#if defined OS_POSIX
+static vector<string>& _get_unlink_list()
+{
+    /* static synchronized constructor technique */
+    static vector<string> unlink_list; return unlink_list;
+}
+
+static void _exit_hook_delete_files()
+{
+    for (auto file : _get_unlink_list()) {
+        _delete_file(file.c_str());
+    }
+}
+
+static void _delete_file_on_exit(string file) {
+    _get_unlink_list().push_back(file);
+}
+
+static void signal_handler(int signum, siginfo_t *info, void *)
+{
+    switch (signum) {
+        case SIGTERM:
+        case SIGINT:
+            _exit_hook_delete_files();
+            _exit(0);
+            break;
+        default:
+            break;
+    }
+}
+
+static void _install_signal_handler()
+{
+    struct sigaction sigaction_handler;
+    memset(&sigaction_handler, 0, sizeof(sigaction_handler));
+    sigaction_handler.sa_sigaction = signal_handler;
+    sigaction_handler.sa_flags = SA_SIGINFO;
+    sigaction(SIGTERM, &sigaction_handler, nullptr);
+    sigaction(SIGINT, &sigaction_handler, nullptr);
+    sigaction(SIGHUP, &sigaction_handler, nullptr);
+}
+#endif
+
 #if defined OS_POSIX
 static xi_nub_platform_sock listen_socket_create(const char *pipe_path)
 {
     sockaddr_un saddr;
 
     size_t saddr_len = _unix_pipe_address(&saddr, pipe_path);
+
+#if defined OS_MACOS
+    _delete_file_on_exit(saddr.sun_path);
+#endif
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
