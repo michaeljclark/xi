@@ -63,8 +63,6 @@ typedef void(*xi_nub_read_cb)(xi_nub_conn *conn, xi_nub_error err, void *buf, si
 typedef void(*xi_nub_write_cb)(xi_nub_conn *conn, xi_nub_error err, void *buf, size_t len);
 typedef void(*xi_nub_close_cb)(xi_nub_conn *conn, xi_nub_error err);
 
-void xi_nub_init(xi_nub_ctx *ctx);
-
 /* nub server */
 xi_nub_server* xi_nub_server_new(xi_nub_ctx *ctx, int argc, const char **argv);
 void xi_nub_server_accept(xi_nub_server *server, int nthreads, xi_nub_accept_cb cb);
@@ -85,6 +83,9 @@ xi_nub_ctx* xi_nub_conn_get_context(xi_nub_conn *conn);
 const char* xi_nub_conn_get_identity(xi_nub_conn *conn);
 
 /* nub context */
+xi_nub_ctx* xi_nub_ctx_create(const char *app_name);
+void xi_nub_ctx_destroy(xi_nub_ctx *ctx);
+
 xi_nub_ctx* xi_nub_ctx_get_root_context();
 const char* xi_nub_ctx_get_profile_path(xi_nub_ctx *ctx);
 void xi_nub_ctx_set_user_data(xi_nub_ctx *ctx, void *data);

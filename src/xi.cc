@@ -684,7 +684,7 @@ static void my_nub_client_connect_cb(xi_nub_conn *conn, xi_nub_error err)
 
 static void do_nub_client()
 {
-    xi_nub_ctx *ctx = xi_nub_ctx_get_root_context();
+    xi_nub_ctx *ctx = xi_nub_ctx_create("Xi");
 
 #if defined OS_WINDOWS
     SetConsoleOutputCP(CP_UTF8);
@@ -701,6 +701,8 @@ static void do_nub_client()
     const auto t1 = high_resolution_clock::now();
     xi_nub_client_connect(c, 8, my_nub_client_connect_cb);
     const auto t2 = high_resolution_clock::now();
+
+    xi_nub_ctx_destroy(ctx);
 
     /*
      * print timings
@@ -900,7 +902,7 @@ static void my_nub_server_accept_cb(xi_nub_conn *conn, xi_nub_error err)
 
 static void do_nub_server()
 {
-    xi_nub_ctx *ctx = xi_nub_ctx_get_root_context();
+    xi_nub_ctx *ctx = xi_nub_ctx_create("Xi");
 
     if (debug_enabled) {
         printf("\n-- Xi nub-server\n");
@@ -911,6 +913,8 @@ static void do_nub_server()
     const char* args[] = { "<self>", "nub-server" };
     xi_nub_server *s = xi_nub_server_new(ctx, 2, args);
     xi_nub_server_accept(s, 8, my_nub_server_accept_cb);
+
+    xi_nub_ctx_destroy(ctx);
 }
 
 /*

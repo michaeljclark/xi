@@ -10,10 +10,9 @@
 #include "xi_nub.h"
 #include "xi_common.h"
 
-void test_lock()
+void test_lock(xi_nub_ctx *ctx)
 {
     char sem_file[MAXPATHLEN];
-    xi_nub_ctx* ctx = xi_nub_ctx_get_root_context();
     const char* profile_path = xi_nub_ctx_get_profile_path(ctx);
     snprintf(sem_file, sizeof(sem_file), "%s%s", profile_path,
         PATH_SEPARATOR "semaphore");
@@ -35,10 +34,9 @@ void test_lock()
     	__func__, ticket, is_leader, pid, sem_file);
 }
 
-void test_unlock()
+void test_unlock(xi_nub_ctx *ctx)
 {
     char sem_file[MAXPATHLEN];
-    xi_nub_ctx* ctx = xi_nub_ctx_get_root_context();
     const char* profile_path = xi_nub_ctx_get_profile_path(ctx);
     snprintf(sem_file, sizeof(sem_file), "%s%s", profile_path,
         PATH_SEPARATOR "semaphore");
@@ -70,7 +68,7 @@ int test_sem_cb(void*)
 	return 5;
 }
 
-void test_sem()
+void test_sem(xi_nub_ctx *ctx)
 {
 	thrd_t t;
 	int res;
@@ -104,9 +102,11 @@ void test_sem()
 
 int main()
 {
+    xi_nub_ctx *ctx = xi_nub_ctx_create("Xi");
 	for (size_t i = 0; i < 5; i++) {
-		test_lock();
+		test_lock(ctx);
 	}
-	test_unlock();
-	test_sem();
+	test_unlock(ctx);
+	test_sem(ctx);
+	xi_nub_ctx_destroy(ctx);
 }

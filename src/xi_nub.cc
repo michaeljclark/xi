@@ -30,6 +30,7 @@ template <typename T> using vector = std::vector<T>;
 
 struct xi_nub_ctx
 {
+    string app_name;
     string user_name;
     string home_path;
     string profile_path;
@@ -63,11 +64,11 @@ struct xi_nub_conn
  */
 
 #if defined OS_WINDOWS
-const char *profile_template = "%s\\Xi";
+const char *profile_template = "%s\\%s";
 #elif defined OS_MACOS
-const char *profile_template = "%s/Library/Application Support/Xi";
+const char *profile_template = "%s/Library/Application Support/%s";
 #elif defined OS_LINUX
-const char *profile_template =  "%s/.config/Xi";
+const char *profile_template =  "%s/.config/%s";
 #endif
 
 #if defined OS_WINDOWS
@@ -77,7 +78,8 @@ static void xi_nub_find_dirs(xi_nub_ctx *ctx)
     ctx->user_name = _windows_getenv("USERNAME");
     ctx->home_path = _windows_getenv("HOMEPATH");
     string appdata =  _windows_getenv("APPDATA");
-    snprintf(profile_path_tmp, MAX_PATH, profile_template, appdata.c_str());
+    snprintf(profile_path_tmp, MAX_PATH, profile_template,
+             appdata.c_str(), ctx->app_name.c_str());
     ctx->profile_path = profile_path_tmp;
 }
 #endif
@@ -89,7 +91,8 @@ static void xi_nub_find_dirs(xi_nub_ctx *ctx)
     struct passwd *p = getpwuid(getuid());
     ctx->user_name = p->pw_name;
     ctx->home_path = p->pw_dir;
-    snprintf(profile_path_tmp, MAXPATHLEN, profile_template, ctx->home_path.c_str());
+    snprintf(profile_path_tmp, MAXPATHLEN, profile_template,
+             ctx->home_path.c_str(), ctx->app_name.c_str());
     ctx->profile_path = profile_path_tmp;
 }
 #endif
@@ -131,7 +134,7 @@ static char** _get_argv(vector<string> vec)
 
 struct _argument_hash { unsigned char hash[32]; };
 
-_argument_hash _get_args_hash(vector<string> vec)
+static _argument_hash _get_args_hash(vector<string> vec)
 {
     _argument_hash ah;
     sha256_ctx ctx;
@@ -145,7 +148,7 @@ _argument_hash _get_args_hash(vector<string> vec)
     return ah;
 }
 
-string _to_hex(const unsigned char *in, size_t in_len)
+static string _to_hex(const unsigned char *in, size_t in_len)
 {
     size_t o = 0, l = in_len << 1;
     char *buf = (char*)alloca(l + 1);
@@ -155,12 +158,10 @@ string _to_hex(const unsigned char *in, size_t in_len)
     return string(buf, l);
 }
 
-string _get_arg_addr(vector<string> vec)
+static string _get_nub_addr(xi_nub_ctx *ctx, vector<string> vec)
 {
     _argument_hash ah = _get_args_hash(vec);
-    string addr = "Xi-";
-    addr.append(_to_hex(ah.hash, sizeof(ah.hash)));
-    return addr;
+    return ctx->app_name + string("-") + _to_hex(ah.hash, sizeof(ah.hash));
 }
 
 
@@ -194,7 +195,7 @@ static void xi_nub_wake_all_waiters(xi_nub_ctx *ctx)
     for (size_t i = 0; i < num_waiters; i++) {
         uint32_t pid = *p++;
         char sem_name[16];
-        snprintf(sem_name, sizeof(sem_name), "xi-%u", pid);
+        snprintf(sem_name, sizeof(sem_name), "%s-%u", ctx->app_name.c_str(), pid);
         xi_nub_platform_semaphore sem = _semaphore_open(sem_name);
         if (sem.has_error()) {
             fprintf(stderr, "error: _semaphore_open: error_code=%d\n",
@@ -215,7 +216,7 @@ static void xi_nub_wake_all_waiters(xi_nub_ctx *ctx)
 
 void xi_nub_server_accept(xi_nub_server *server, int nthreads, xi_nub_accept_cb cb)
 {
-    string pipe_addr = _get_arg_addr(server->args);
+    string pipe_addr = _get_nub_addr(server->ctx, server->args);
     xi_nub_platform_sock listen = listen_socket_create(pipe_addr.c_str());
     if (debug) {
         printf("xi_nub_server_accept: listening sock=%s\n", listen.identity());
@@ -308,7 +309,7 @@ static xi_nub_ticket xi_nub_get_ticket(xi_nub_ctx *ctx)
 static void xi_nub_sleep_on_ticket(xi_nub_ctx *ctx, xi_nub_ticket ticket)
 {
     char sem_name[16];
-    snprintf(sem_name, sizeof(sem_name), "xi-%u", ticket.pid);
+    snprintf(sem_name, sizeof(sem_name), "%s-%u", ctx->app_name.c_str(), ticket.pid);
     xi_nub_platform_semaphore sem = _semaphore_create(sem_name);
     if (sem.has_error()) {
         fprintf(stderr, "error: _semaphore_create: error_code=%d\n", sem.error_code());
@@ -332,7 +333,7 @@ static void xi_nub_sleep_on_ticket(xi_nub_ctx *ctx, xi_nub_ticket ticket)
 
 void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_cb cb)
 {
-    string pipe_addr = _get_arg_addr(client->args);
+    string pipe_addr = _get_nub_addr(client->ctx, client->args);
 
     xi_nub_conn conn{
         client->ctx, NULL, client, client_socket_connect(pipe_addr.c_str())
@@ -419,6 +420,8 @@ const char* xi_nub_conn_get_identity(xi_nub_conn *conn)
  * nub accessors
  */
 
+static xi_nub_ctx *global_nub_ctx;
+
 void xi_nub_conn_set_user_data(xi_nub_conn *conn, void *data) { conn->user_data = data; }
 void* xi_nub_conn_get_user_data(xi_nub_conn *conn) { return conn->user_data; }
 xi_nub_client* xi_nub_conn_get_client(xi_nub_conn *conn) { return conn->client; }
@@ -428,15 +431,17 @@ xi_nub_ctx* xi_nub_conn_get_context(xi_nub_conn *conn) { return conn->ctx; }
 void xi_nub_ctx_set_user_data(xi_nub_ctx *ctx, void *data) { ctx->user_data = data; }
 void* xi_nub_ctx_get_user_data(xi_nub_ctx *ctx) { return ctx->user_data; }
 const char* xi_nub_ctx_get_profile_path(xi_nub_ctx *ctx) { return ctx->profile_path.c_str(); }
+xi_nub_ctx* xi_nub_ctx_get_root_context() { return global_nub_ctx; }
 
 
 /*
  * nub context
  */
 
-void xi_nub_init(xi_nub_ctx *ctx)
+void xi_nub_init(xi_nub_ctx *ctx, const char *app_name)
 {
     /* find user profile directory */
+    ctx->app_name = app_name;
     xi_nub_find_dirs(ctx);
 
     /* create profile directory if it does not exist */
@@ -453,14 +458,21 @@ void xi_nub_init(xi_nub_ctx *ctx)
 #endif
 }
 
-xi_nub_ctx* xi_nub_ctx_get_root_context()
+xi_nub_ctx* xi_nub_ctx_create(const char *app_name)
 {
-    static xi_nub_ctx ctx;
+    xi_nub_ctx *ctx;
 
-    /* TODO - this needs to be atomic */
-    if (ctx.profile_path.size() == 0) {
-        xi_nub_init(&ctx);
+    ctx = new xi_nub_ctx();
+    xi_nub_init(ctx, app_name);
+
+    if (!global_nub_ctx) {
+        global_nub_ctx = ctx;
     }
 
-    return &ctx;
+    return ctx;
+}
+
+void xi_nub_ctx_destroy(xi_nub_ctx *ctx)
+{
+    delete ctx;
 }
