@@ -56,8 +56,8 @@ static bool nub_server = false;
 static bool debug_enabled = false;
 static bool timings_enabled = false;
 static bool optimized_search = true;
-vector<string> unicode_search_terms;
-string unicode_numeric_term;
+static vector<string> unicode_search_terms;
+static string unicode_numeric_term;
 
 /*
  * schema for UnicodeData.txt from Unicode Character Database (UCD.zip)
