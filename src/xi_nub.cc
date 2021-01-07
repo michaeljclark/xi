@@ -171,16 +171,15 @@ string _get_arg_addr(vector<string> vec)
 xi_nub_server* xi_nub_server_new(xi_nub_ctx *ctx, int argc, const char **argv)
 {
     xi_nub_server *s = (xi_nub_server *)calloc(1, sizeof(xi_nub_server));
-    s->ctx = xi_nub_ctx_get_root_context();
+    s->ctx = ctx;
     s->args = _get_args(argc, argv);
     if (debug) printf("xi_nub_server_new: server=%p\n", s);
     return s;
 }
 
-static void xi_nub_wake_all_waiters()
+static void xi_nub_wake_all_waiters(xi_nub_ctx *ctx)
 {
     char sem_file[MAXPATHLEN];
-    xi_nub_ctx* ctx = xi_nub_ctx_get_root_context();
     const char* profile_path = xi_nub_ctx_get_profile_path(ctx);
     snprintf(sem_file, sizeof(sem_file), "%s%s", profile_path,
         PATH_SEPARATOR "semaphore");
@@ -228,7 +227,7 @@ void xi_nub_server_accept(xi_nub_server *server, int nthreads, xi_nub_accept_cb 
         exit(1);
     }
 
-    xi_nub_wake_all_waiters();
+    xi_nub_wake_all_waiters(server->ctx);
 
     for (;;) {
         xi_nub_conn conn{
@@ -257,7 +256,7 @@ void xi_nub_server_accept(xi_nub_server *server, int nthreads, xi_nub_accept_cb 
 xi_nub_client* xi_nub_client_new(xi_nub_ctx *ctx, int argc, const char **argv)
 {
     xi_nub_client *c = (xi_nub_client *)calloc(1, sizeof(xi_nub_client));
-    c->ctx = xi_nub_ctx_get_root_context();
+    c->ctx = ctx;
     c->args = _get_args(argc, argv);
     if (debug) {
         printf("xi_nub_client_new: client=%p\n", c);
