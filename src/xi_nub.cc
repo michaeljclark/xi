@@ -438,7 +438,7 @@ xi_nub_ctx* xi_nub_ctx_get_root_context() { return global_nub_ctx; }
  * nub context
  */
 
-void xi_nub_init(xi_nub_ctx *ctx, const char *app_name)
+static void xi_nub_init(xi_nub_ctx *ctx, const char *app_name)
 {
     /* find user profile directory */
     ctx->app_name = app_name;
