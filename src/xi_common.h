@@ -33,6 +33,11 @@
 #define OS_POSIX
 #endif
 
+#ifdef __FreeBSD__
+#define OS_FREEBSD
+#define OS_POSIX
+#endif
+
 #ifdef __linux__
 #define OS_LINUX
 #define OS_POSIX
@@ -535,6 +540,17 @@ static string _executable_path()
 {
     char *mname = (char*)alloca(MAXPATHLEN);
     ssize_t ret = readlink("/proc/self/exe", mname, MAXPATHLEN);
+    return (ret > 0) ? string(mname, ret) : string();
+}
+#endif
+
+#if defined OS_FREEBSD
+static string _executable_path()
+{
+    char temp[32];
+    snprintf(temp, sizeof(temp),"/proc/%d/file", ::getpid());
+    char *mname = (char*)alloca(MAXPATHLEN);
+    ssize_t ret = readlink(temp, mname, MAXPATHLEN);
     return (ret > 0) ? string(mname, ret) : string();
 }
 #endif

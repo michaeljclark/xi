@@ -67,7 +67,7 @@ struct xi_nub_conn
 const char *profile_template = "%s\\%s";
 #elif defined OS_MACOS
 const char *profile_template = "%s/Library/Application Support/%s";
-#elif defined OS_LINUX
+#elif defined OS_LINUX || defined OS_FREEBSD
 const char *profile_template =  "%s/.config/%s";
 #endif
 
