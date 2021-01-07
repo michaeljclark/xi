@@ -55,6 +55,7 @@ void test_unlock()
 		printf("ticket-%zu: pid=%d\n", i, pid);
 	}
 	_close(&f);
+	_delete_file(sem_file);
 }
 
 static uint64_t t1, t2, t3, t4;
@@ -103,7 +104,9 @@ void test_sem()
 
 int main()
 {
-	test_lock();
+	for (size_t i = 0; i < 5; i++) {
+		test_lock();
+	}
 	test_unlock();
 	test_sem();
 }
