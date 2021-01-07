@@ -74,9 +74,9 @@ void test_sem(xi_nub_ctx *ctx)
 	int res;
 	static const char *sem_name = "test_sem1";
 
-	test_sem1 = _semaphore_create(sem_name);
-	if (test_sem1.has_error() && test_sem1.error_code() == xi_nub_eexist) {
-		test_sem1 = _semaphore_open(sem_name);
+	test_sem1 = _semaphore_open(sem_name);
+	if (test_sem1.has_error()) {
+		test_sem1 = _semaphore_create(sem_name);
 	}
 	assert(!test_sem1.has_error());
 
