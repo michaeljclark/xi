@@ -90,8 +90,6 @@ const char* xi_nub_ctx_get_profile_path(xi_nub_ctx *ctx);
 void xi_nub_ctx_set_user_data(xi_nub_ctx *ctx, void *data);
 void* xi_nub_ctx_get_user_data(xi_nub_ctx *ctx);
 
-void xi_nub_semaphore();
-
 #ifdef __cplusplus
 }
 #endif
