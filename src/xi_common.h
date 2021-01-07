@@ -691,7 +691,7 @@ static bool _make_directory(const char *path)
 #endif
 
 #if defined OS_WINDOWS
-static string windows_getenv(const char *name)
+static string _windows_getenv(const char *name)
 {
     size_t len;
     string s;

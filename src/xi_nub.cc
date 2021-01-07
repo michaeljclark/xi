@@ -74,9 +74,9 @@ const char *profile_template =  "%s/.config/Xi";
 static void xi_nub_find_dirs(xi_nub_ctx *ctx)
 {
     char profile_path_tmp[MAXPATHLEN];
-    ctx->user_name = windows_getenv("USERNAME");
-    ctx->home_path = windows_getenv("HOMEPATH");
-    string appdata =  windows_getenv("APPDATA");
+    ctx->user_name = _windows_getenv("USERNAME");
+    ctx->home_path = _windows_getenv("HOMEPATH");
+    string appdata =  _windows_getenv("APPDATA");
     snprintf(profile_path_tmp, MAX_PATH, profile_template, appdata.c_str());
     ctx->profile_path = profile_path_tmp;
 }
