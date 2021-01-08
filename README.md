@@ -28,6 +28,7 @@ _Xi_ has been tested on the following operating systems:
 - Windows 10 20H2
 - Ubuntu 20.04 LTS
 - macOS catalina 10.15.7
+- FreeBSD 12.1-RELEASE
 
 ## Build Instructions
 
