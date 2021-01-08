@@ -1160,7 +1160,7 @@ static xi_nub_platform_sock client_socket_connect(const char *pipe_path)
 typedef xi_nub_unix_sock xi_nub_platform_sock;
 #endif
 
-#if defined OS_MACOS
+#if defined OS_MACOS || defined OS_FREEBSD
 static size_t _unix_pipe_address(sockaddr_un *saddr, const char *path)
 {
     xi_nub_ctx *ctx = xi_nub_ctx_get_root_context();
@@ -1168,8 +1168,15 @@ static size_t _unix_pipe_address(sockaddr_un *saddr, const char *path)
 
     memset(saddr, 0, sizeof(*saddr));
     saddr->sun_family = AF_UNIX;
+
+#if defined OS_MACOS
     return snprintf(saddr->sun_path, sizeof(saddr->sun_path),
                     "%s/%s", profile, path);
+#else
+    snprintf(saddr->sun_path, sizeof(saddr->sun_path),
+                    "%s/%s", profile, path);
+    return offsetof(sockaddr_un,sun_path) + strlen(saddr->sun_path) + 1;
+#endif
 }
 #elif defined OS_POSIX
 static size_t _unix_pipe_address(sockaddr_un *saddr, const char *pipe_path)
@@ -1237,7 +1244,7 @@ static xi_nub_platform_sock listen_socket_create(const char *pipe_path)
 
     size_t saddr_len = _unix_pipe_address(&saddr, pipe_path);
 
-#if defined OS_MACOS
+#if defined OS_MACOS || defined OS_FREEBSD
     _delete_file_on_exit(saddr.sun_path);
 #endif
 
