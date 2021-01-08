@@ -410,7 +410,7 @@ struct xi_nub_unix_semaphore : xi_nub_file
 typedef xi_nub_unix_semaphore xi_nub_platform_semaphore;
 #endif
 
-#if defined OS_POSIX
+#if defined OS_POSIX && !defined OS_FREEBSD
 static xi_nub_unix_semaphore _semaphore_create(const char *name)
 {
     sem_t *sem = sem_open(name, O_CREAT | O_EXCL, 0644, 0);
@@ -418,10 +418,32 @@ static xi_nub_unix_semaphore _semaphore_create(const char *name)
 }
 #endif
 
-#if defined OS_POSIX
+#if defined OS_POSIX && !defined OS_FREEBSD
 static xi_nub_unix_semaphore _semaphore_open(const char *name)
 {
     sem_t *sem = sem_open(name, 0);
+    return xi_nub_unix_semaphore(sem, errno);
+}
+#endif
+
+#if defined OS_POSIX && defined OS_FREEBSD
+static xi_nub_unix_semaphore _semaphore_create(const char *name)
+{
+    size_t namelen = strlen(name);
+    char *sem_name = (char*)alloca(namelen + 2);
+    snprintf(sem_name, namelen + 2, "%s%s", name[0] != '/' ? "/" : "", name);
+    sem_t *sem = sem_open(sem_name, O_CREAT | O_EXCL, 0644, 0);
+    return xi_nub_unix_semaphore(sem, errno);
+}
+#endif
+
+#if defined OS_POSIX && defined OS_FREEBSD
+static xi_nub_unix_semaphore _semaphore_open(const char *name)
+{
+    size_t namelen = strlen(name);
+    char *sem_name = (char*)alloca(namelen + 2);
+    snprintf(sem_name, namelen + 2, "%s%s", name[0] != '/' ? "/" : "", name);
+    sem_t *sem = sem_open(sem_name, 0);
     return xi_nub_unix_semaphore(sem, errno);
 }
 #endif
