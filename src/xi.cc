@@ -443,10 +443,10 @@ void do_print_results(vector<unicode_data> data)
 }
 
 /*
- * nub common
+ * xi connection
  */
 
-struct mynub_conn
+struct xi_connection
 {
     enum { buf_size = 32768 };
 
@@ -482,7 +482,7 @@ struct mynub_conn
     struct span copy_remaining(); /* call before read call */
 };
 
-template <typename INT, typename SWAP> size_t mynub_conn::write_int(INT num, SWAP f)
+template <typename INT, typename SWAP> size_t xi_connection::write_int(INT num, SWAP f)
 {
     if (offset + sizeof(num) > length) return 0;
     INT t = f(num);
@@ -495,7 +495,7 @@ template <typename INT, typename SWAP> size_t mynub_conn::write_int(INT num, SWA
     return sizeof(num);
 }
 
-size_t mynub_conn::write_string(const char *s, size_t len)
+size_t xi_connection::write_string(const char *s, size_t len)
 {
     size_t ret = write_int64(len);
     if (ret == 0 || offset + len > length) return 0;
@@ -508,7 +508,7 @@ size_t mynub_conn::write_string(const char *s, size_t len)
     return len + ret;
 }
 
-template <typename INT, typename SWAP> size_t mynub_conn::read_int(INT *num, SWAP f)
+template <typename INT, typename SWAP> size_t xi_connection::read_int(INT *num, SWAP f)
 {
     if (offset + sizeof(num) > length) return 0;
     INT t;
@@ -522,7 +522,7 @@ template <typename INT, typename SWAP> size_t mynub_conn::read_int(INT *num, SWA
     return sizeof(*num);
 }
 
-size_t mynub_conn::read_string(char *s, size_t buf_len, size_t *str_len)
+size_t xi_connection::read_string(char *s, size_t buf_len, size_t *str_len)
 {
     int64_t len64;
     size_t ret = read_int64(&len64);
@@ -538,7 +538,7 @@ size_t mynub_conn::read_string(char *s, size_t buf_len, size_t *str_len)
     return len64 + ret;
 }
 
-void mynub_conn::copy_input(struct span input)
+void xi_connection::copy_input(struct span input)
 {
     size_t copy_len = input.length;
     if (offset + copy_len > length) copy_len = length - offset;
@@ -547,24 +547,24 @@ void mynub_conn::copy_input(struct span input)
     }
 }
 
-struct mynub_conn::span mynub_conn::copy_output()
+struct xi_connection::span xi_connection::copy_output()
 {
-    return mynub_conn::span{&buf[0], offset };
+    return xi_connection::span{&buf[0], offset };
 }
 
-struct mynub_conn::span mynub_conn::copy_remaining()
+struct xi_connection::span xi_connection::copy_remaining()
 {
-    return mynub_conn::span{&buf[offset], length-offset };
+    return xi_connection::span{&buf[offset], length-offset };
 }
 
 
 /*
- * nub client
+ * xi client
  */
 
-static void my_nub_client_close_cb(xi_nub_conn *conn, xi_nub_error err)
+static void xi_client_close_cb(xi_nub_conn *nub_conn, xi_nub_error err)
 {
-    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+    xi_connection *conn = (xi_connection *)xi_nub_conn_get_user_data(nub_conn);
 
     if (err) {
         fprintf(stderr, "%s: error: close(): error_code=%d\n", __func__, err);
@@ -572,17 +572,17 @@ static void my_nub_client_close_cb(xi_nub_conn *conn, xi_nub_error err)
     }
 
     if (debug_enabled) {
-        printf("my_nub_client_close_cb:\n");
+        printf("xi_client_close_cb:\n");
     }
 }
 
-static void my_nub_client_req_write_cb(xi_nub_conn *conn, xi_nub_error err,
+static void xi_client_req_write_cb(xi_nub_conn *nub_conn, xi_nub_error err,
     void *buf, size_t len);
 
-static void my_nub_client_res_read_cb(xi_nub_conn *conn, xi_nub_error err,
+static void xi_client_res_read_cb(xi_nub_conn *nub_conn, xi_nub_error err,
     void *buf, size_t len)
 {
-    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+    xi_connection *conn = (xi_connection *)xi_nub_conn_get_user_data(nub_conn);
 
     if (err) {
         fprintf(stderr, "%s: error: read(): error_code=%d\n", __func__, err);
@@ -590,26 +590,26 @@ static void my_nub_client_res_read_cb(xi_nub_conn *conn, xi_nub_error err,
     }
 
     if (debug_enabled) {
-        printf("my_nub_client_res_read_cb: conn=%s, len=%zu\n",
-            xi_nub_conn_get_identity(conn), len);
+        printf("xi_client_res_read_cb: conn=%s, len=%zu\n",
+            xi_nub_conn_get_identity(nub_conn), len);
     }
 
-    myconn->copy_input(mynub_conn::span{buf, len});
+    conn->copy_input(xi_connection::span{buf, len});
 
     /* place to store results */
     vector<unicode_data> r;
 
     /* parse response */
     int64_t nitems;
-    myconn->read_int64(&nitems);
+    conn->read_int64(&nitems);
     r.resize(nitems);
     for (auto &d : r) {
         int32_t codepoint = 0;
         size_t str_len = 0;
         char str_buf[1024];
-        myconn->read_int32(&codepoint);
+        conn->read_int32(&codepoint);
         d.Code = codepoint;
-        myconn->read_string(str_buf, sizeof(str_buf), &str_len);
+        conn->read_string(str_buf, sizeof(str_buf), &str_len);
         d.Name = string(str_buf, str_len);
     }
 
@@ -621,17 +621,17 @@ static void my_nub_client_res_read_cb(xi_nub_conn *conn, xi_nub_error err,
     }
 
     /* write shutdown request */
-    myconn->reset();
-    myconn->write_int8(0); /* 0 = shutdown */
-    struct mynub_conn::span out = myconn->copy_output();
-    myconn->closing = 1;
-    xi_nub_conn_write(conn, out.data, out.length, my_nub_client_req_write_cb);
+    conn->reset();
+    conn->write_int8(0); /* 0 = shutdown */
+    struct xi_connection::span out = conn->copy_output();
+    conn->closing = 1;
+    xi_nub_conn_write(nub_conn, out.data, out.length, xi_client_req_write_cb);
 }
 
-static void my_nub_client_req_write_cb(xi_nub_conn *conn, xi_nub_error err,
+static void xi_client_req_write_cb(xi_nub_conn *nub_conn, xi_nub_error err,
     void *buf, size_t len)
 {
-    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+    xi_connection *conn = (xi_connection *)xi_nub_conn_get_user_data(nub_conn);
 
     if (err) {
         fprintf(stderr, "%s: error: write(): error_code=%d\n", __func__, err);
@@ -639,22 +639,22 @@ static void my_nub_client_req_write_cb(xi_nub_conn *conn, xi_nub_error err,
     }
 
     if (debug_enabled) {
-        printf("my_nub_client_req_write_cb: conn=%s, len=%zu\n",
-            xi_nub_conn_get_identity(conn), len);
+        printf("xi_client_req_write_cb: conn=%s, len=%zu\n",
+            xi_nub_conn_get_identity(nub_conn), len);
     }
 
-    if (myconn->closing) {
-        xi_nub_conn_close(conn, my_nub_client_close_cb);
+    if (conn->closing) {
+        xi_nub_conn_close(nub_conn, xi_client_close_cb);
         return;
     }
 
     /* read response */
-    myconn->reset();
-    struct mynub_conn::span in = myconn->copy_remaining();
-    xi_nub_conn_read(conn, in.data, in.length, my_nub_client_res_read_cb);
+    conn->reset();
+    struct xi_connection::span in = conn->copy_remaining();
+    xi_nub_conn_read(nub_conn, in.data, in.length, xi_client_res_read_cb);
 }
 
-static void my_nub_client_connect_cb(xi_nub_conn *conn, xi_nub_error err)
+static void xi_client_connect_cb(xi_nub_conn *nub_conn, xi_nub_error err)
 {
     if (err) {
         fprintf(stderr, "%s: error: connect(): error_code=%d\n", __func__, err);
@@ -662,11 +662,11 @@ static void my_nub_client_connect_cb(xi_nub_conn *conn, xi_nub_error err)
     }
 
     if (debug_enabled) {
-        printf("my_nub_client_connect_cb\n");
+        printf("xi_client_connect_cb\n");
     }
 
-    mynub_conn *myconn = new mynub_conn{};
-    xi_nub_conn_set_user_data(conn, myconn);
+    xi_connection *conn = new xi_connection{};
+    xi_nub_conn_set_user_data(nub_conn, conn);
 
     /* prepare request */
     string request = join(unicode_search_terms, " ", 0, unicode_search_terms.size());
@@ -675,11 +675,11 @@ static void my_nub_client_connect_cb(xi_nub_conn *conn, xi_nub_error err)
     if (debug_enabled) printf("request: %s\n", request.c_str());
 
     /* write request */
-    myconn->reset();
-    myconn->write_int8(1); /* 1 = search */
-    myconn->write_string(request.data(), request.size());
-    struct mynub_conn::span out = myconn->copy_output();
-    xi_nub_conn_write(conn, out.data, out.length, my_nub_client_req_write_cb);
+    conn->reset();
+    conn->write_int8(1); /* 1 = search */
+    conn->write_string(request.data(), request.size());
+    struct xi_connection::span out = conn->copy_output();
+    xi_nub_conn_write(nub_conn, out.data, out.length, xi_client_req_write_cb);
 }
 
 static void do_nub_client()
@@ -699,7 +699,7 @@ static void do_nub_client()
     const char* args[] = { "<self>", "nub-server" };
     xi_nub_client *c = xi_nub_client_new(ctx, 2, args);
     const auto t1 = high_resolution_clock::now();
-    xi_nub_client_connect(c, 8, my_nub_client_connect_cb);
+    xi_nub_client_connect(c, 8, xi_client_connect_cb);
     const auto t2 = high_resolution_clock::now();
 
     xi_nub_ctx_destroy(ctx);
@@ -715,7 +715,7 @@ static void do_nub_client()
 }
 
 /*
- * nub server
+ * xi server
  */
 
 struct nub_server_state
@@ -725,9 +725,9 @@ struct nub_server_state
     vector<vector<string>> tokens;
 };
 
-static void my_nub_server_close_cb(xi_nub_conn *conn, xi_nub_error err)
+static void xi_server_close_cb(xi_nub_conn *nub_conn, xi_nub_error err)
 {
-    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+    xi_connection *conn = (xi_connection *)xi_nub_conn_get_user_data(nub_conn);
 
     if (err) {
         fprintf(stderr, "%s: error: close(): error_code=%d\n", __func__, err);
@@ -735,17 +735,17 @@ static void my_nub_server_close_cb(xi_nub_conn *conn, xi_nub_error err)
     }
 
     if (debug_enabled) {
-        printf("my_nub_server_close_cb\n");
+        printf("xi_server_close_cb\n");
     }
 }
 
-static void my_nub_server_req_read_cb(xi_nub_conn *conn, xi_nub_error err,
+static void xi_server_req_read_cb(xi_nub_conn *nub_conn, xi_nub_error err,
     void *buf, size_t len);
 
-static void my_nub_server_res_write_cb(xi_nub_conn *conn, xi_nub_error err,
+static void xi_server_res_write_cb(xi_nub_conn *nub_conn, xi_nub_error err,
     void *buf, size_t len)
 {
-    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+    xi_connection *conn = (xi_connection *)xi_nub_conn_get_user_data(nub_conn);
 
     if (err) {
         fprintf(stderr, "%s: error: write(): error_code=%d\n", __func__, err);
@@ -753,20 +753,20 @@ static void my_nub_server_res_write_cb(xi_nub_conn *conn, xi_nub_error err,
     }
 
     if (debug_enabled) {
-        printf("my_nub_server_res_write_cb: conn=%s, len=%zu\n",
-            xi_nub_conn_get_identity(conn), len);
+        printf("xi_server_res_write_cb: conn=%s, len=%zu\n",
+            xi_nub_conn_get_identity(nub_conn), len);
     }
 
     /* issue read request for next command */
-    myconn->reset();
-    struct mynub_conn::span in = myconn->copy_remaining();
-    xi_nub_conn_read(conn, in.data, in.length, my_nub_server_req_read_cb);
+    conn->reset();
+    struct xi_connection::span in = conn->copy_remaining();
+    xi_nub_conn_read(nub_conn, in.data, in.length, xi_server_req_read_cb);
 }
 
-static void my_nub_server_req_read_cb(xi_nub_conn *conn, xi_nub_error err,
+static void xi_server_req_read_cb(xi_nub_conn *nub_conn, xi_nub_error err,
     void *buf, size_t len)
 {
-    mynub_conn *myconn = (mynub_conn *)xi_nub_conn_get_user_data(conn);
+    xi_connection *conn = (xi_connection *)xi_nub_conn_get_user_data(nub_conn);
 
     if (err) {
         fprintf(stderr, "%s: error: read(): error_code=%d\n", __func__, err);
@@ -774,29 +774,29 @@ static void my_nub_server_req_read_cb(xi_nub_conn *conn, xi_nub_error err,
     }
 
     if (debug_enabled) {
-        printf("my_nub_server_req_read_cb: conn=%s, len=%zu\n",
-            xi_nub_conn_get_identity(conn), len);
+        printf("xi_server_req_read_cb: conn=%s, len=%zu\n",
+            xi_nub_conn_get_identity(nub_conn), len);
     }
 
-    myconn->copy_input(mynub_conn::span{buf, len});
+    conn->copy_input(xi_connection::span{buf, len});
 
     /* parse request */
     size_t str_len = 0;
     char str_buf[1024];
     int8_t cmd;
-    myconn->read_int8(&cmd);
+    conn->read_int8(&cmd);
     if (cmd != 1) {
         if (cmd != 0) {
             fprintf(stderr, "%s: error: unknown cmd=%d\n", __func__, cmd);
         }
-        xi_nub_conn_close(conn, my_nub_server_close_cb);
+        xi_nub_conn_close(nub_conn, xi_server_close_cb);
         return;
     }
-    myconn->read_string(str_buf, sizeof(str_buf), &str_len);
+    conn->read_string(str_buf, sizeof(str_buf), &str_len);
     string request(str_buf, str_len);
 
     /* get index */
-    xi_nub_ctx *ctx = xi_nub_conn_get_context(conn);
+    xi_nub_ctx *ctx = xi_nub_conn_get_context(nub_conn);
     nub_server_state *state = (nub_server_state *)xi_nub_ctx_get_user_data(ctx);
     if (state == nullptr) {
         state = new nub_server_state();
@@ -864,23 +864,23 @@ static void my_nub_server_req_read_cb(xi_nub_conn *conn, xi_nub_error err,
          * <codepoint:int32> <string.length:int64> <string.data.int8>
          */
         size_t isz = sizeof(int32_t) + sizeof(int64_t) + r[nr].Name.size();
-        if (rsz + isz > sizeof(myconn->buf)) break;
+        if (rsz + isz > sizeof(conn->buf)) break;
         rsz += isz;
         nr++;
     }
 
     /* write response */
-    myconn->reset();
-    myconn->write_int64(nr);
+    conn->reset();
+    conn->write_int64(nr);
     for (size_t i = 0; i < nr; i++) {
-        myconn->write_int32((int32_t)r[i].Code);
-        myconn->write_string(r[i].Name.data(), r[i].Name.size());
+        conn->write_int32((int32_t)r[i].Code);
+        conn->write_string(r[i].Name.data(), r[i].Name.size());
     }
-    struct mynub_conn::span out = myconn->copy_output();
-    xi_nub_conn_write(conn, out.data, out.length, my_nub_server_res_write_cb);
+    struct xi_connection::span out = conn->copy_output();
+    xi_nub_conn_write(nub_conn, out.data, out.length, xi_server_res_write_cb);
 }
 
-static void my_nub_server_accept_cb(xi_nub_conn *conn, xi_nub_error err)
+static void xi_server_accept_cb(xi_nub_conn *nub_conn, xi_nub_error err)
 {
     if (err) {
         fprintf(stderr, "%s: error: accept(): error_code=%d\n", __func__, err);
@@ -888,16 +888,16 @@ static void my_nub_server_accept_cb(xi_nub_conn *conn, xi_nub_error err)
     }
 
     if (debug_enabled) {
-        printf("my_nub_server_accept_cb\n");
+        printf("xi_server_accept_cb\n");
     }
 
-    mynub_conn *myconn = new mynub_conn{};
-    xi_nub_conn_set_user_data(conn, myconn);
+    xi_connection *conn = new xi_connection{};
+    xi_nub_conn_set_user_data(nub_conn, conn);
 
     /* read request */
-    myconn->reset();
-    struct mynub_conn::span in = myconn->copy_remaining();
-    xi_nub_conn_read(conn, in.data, in.length, my_nub_server_req_read_cb);
+    conn->reset();
+    struct xi_connection::span in = conn->copy_remaining();
+    xi_nub_conn_read(nub_conn, in.data, in.length, xi_server_req_read_cb);
 }
 
 static void do_nub_server()
@@ -912,7 +912,7 @@ static void do_nub_server()
     /* start server */
     const char* args[] = { "<self>", "nub-server" };
     xi_nub_server *s = xi_nub_server_new(ctx, 2, args);
-    xi_nub_server_accept(s, 8, my_nub_server_accept_cb);
+    xi_nub_server_accept(s, 8, xi_server_accept_cb);
 
     xi_nub_ctx_destroy(ctx);
 }
