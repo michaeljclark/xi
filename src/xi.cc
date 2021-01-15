@@ -697,11 +697,12 @@ static void do_nub_client()
 
     /* start client */
     const char* args[] = { "<self>", "nub-server" };
-    xi_nub_client *c = xi_nub_client_new(ctx, 2, args);
+    xi_nub_agent *agent = xi_nub_agent_new(ctx, 2, args);
     const auto t1 = high_resolution_clock::now();
-    xi_nub_client_connect(c, 8, xi_client_connect_cb);
+    xi_nub_agent_connect(agent, 1, xi_client_connect_cb);
     const auto t2 = high_resolution_clock::now();
 
+    xi_nub_agent_destroy(agent);
     xi_nub_ctx_destroy(ctx);
 
     /*
@@ -911,9 +912,10 @@ static void do_nub_server()
 
     /* start server */
     const char* args[] = { "<self>", "nub-server" };
-    xi_nub_server *s = xi_nub_server_new(ctx, 2, args);
-    xi_nub_server_accept(s, 8, xi_server_accept_cb);
+    xi_nub_agent *agent = xi_nub_agent_new(ctx, 2, args);
+    xi_nub_agent_accept(agent, 8, xi_server_accept_cb);
 
+    xi_nub_agent_destroy(agent);
     xi_nub_ctx_destroy(ctx);
 }
 

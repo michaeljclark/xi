@@ -20,27 +20,12 @@
 
 #include <cstddef>
 
-/*
- * const char* argv[] = { "Xi", "nub-server" };
- *
- * xi_nub_server *server = xi_nub_server_new(argc, argv);
- * xi_nub_accept(server, myaccept_cb);
- *
- * xi_nub_client *client = xi_nub_client_new(argc, argv)
- * xi_nub_connect(client, myconnect_cb)
- *
- * xi_nub_conn_read(conn, err, buf, len, myread_cb)
- * xi_nub_conn_write(conn, err, buf, len, mywrite_cb)
- * xi_nub_conn_close(conn, err, myclose_cb)
- */
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct xi_nub_ctx;
-struct xi_nub_server;
-struct xi_nub_client;
+struct xi_nub_agent;
 struct xi_nub_conn;
 
 typedef enum
@@ -63,13 +48,11 @@ typedef void(*xi_nub_read_cb)(xi_nub_conn *conn, xi_nub_error err, void *buf, si
 typedef void(*xi_nub_write_cb)(xi_nub_conn *conn, xi_nub_error err, void *buf, size_t len);
 typedef void(*xi_nub_close_cb)(xi_nub_conn *conn, xi_nub_error err);
 
-/* nub server */
-xi_nub_server* xi_nub_server_new(xi_nub_ctx *ctx, int argc, const char **argv);
-void xi_nub_server_accept(xi_nub_server *server, int nthreads, xi_nub_accept_cb cb);
-
-/* nub client */
-xi_nub_client* xi_nub_client_new(xi_nub_ctx *ctx, int argc, const char **argv);
-void xi_nub_client_connect(xi_nub_client *client, int nthreads, xi_nub_connect_cb cb);
+/* nub agent */
+xi_nub_agent* xi_nub_agent_new(xi_nub_ctx *ctx, int argc, const char **argv);
+void xi_nub_agent_accept(xi_nub_agent *agent, int nthreads, xi_nub_accept_cb cb);
+void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb cb);
+void xi_nub_agent_destroy(xi_nub_agent *agent);
 
 /* nub connection */
 void xi_nub_conn_read(xi_nub_conn *conn, void *buf, size_t len, xi_nub_read_cb cb);
@@ -77,8 +60,7 @@ void xi_nub_conn_write(xi_nub_conn *conn, void *buf, size_t len, xi_nub_write_cb
 void xi_nub_conn_close(xi_nub_conn *conn, xi_nub_close_cb cb);
 void xi_nub_conn_set_user_data(xi_nub_conn *conn, void *data);
 void* xi_nub_conn_get_user_data(xi_nub_conn *conn);
-xi_nub_client* xi_nub_conn_get_client(xi_nub_conn *conn);
-xi_nub_server* xi_nub_conn_get_server(xi_nub_conn *conn);
+xi_nub_agent* xi_nub_conn_get_agent(xi_nub_conn *conn);
 xi_nub_ctx* xi_nub_conn_get_context(xi_nub_conn *conn);
 const char* xi_nub_conn_get_identity(xi_nub_conn *conn);
 
