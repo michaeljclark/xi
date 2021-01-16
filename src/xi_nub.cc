@@ -44,10 +44,10 @@ struct xi_nub_agent
     xi_nub_ctx *ctx;
     vector<string> args;
     xi_nub_platform_desc listen_sock;
-    vector<xi_nub_conn> conn;
+    vector<xi_nub_ch> ch;
 };
 
-struct xi_nub_conn
+struct xi_nub_ch
 {
     xi_nub_ctx *ctx;
     xi_nub_agent *agent;
@@ -243,18 +243,18 @@ void xi_nub_agent_accept(xi_nub_agent *agent, int nthreads, xi_nub_accept_cb cb)
     /* TODO: create agent thread */
 
     for (;;) {
-        xi_nub_conn conn{
+        xi_nub_ch ch{
             agent->ctx, agent, listen_socket_accept(agent->listen_sock)
         };
 
         if (debug) {
-            printf("xi_nub_agent_accept: accepted sock=%s\n", conn.sock.identity());
+            printf("xi_nub_agent_accept: accepted sock=%s\n", ch.sock.identity());
         }
 
-        if (conn.sock.has_error()) {
-            cb(&conn, conn.sock.error_code());
+        if (ch.sock.has_error()) {
+            cb(&ch, ch.sock.error_code());
         } else {
-            cb(&conn, xi_nub_success);
+            cb(&ch, xi_nub_success);
         }
 
         /* TODO - implement server shutdown */
@@ -335,20 +335,20 @@ void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb c
 {
     string pipe_addr = _get_nub_addr(agent->ctx, agent->args);
 
-    xi_nub_conn conn{
+    xi_nub_ch ch{
         agent->ctx, agent, client_socket_connect(pipe_addr.c_str())
     };
 
     if (debug) {
-        printf("xi_nub_agent_connect: sock=%s\n", conn.sock.identity());
+        printf("xi_nub_agent_connect: sock=%s\n", ch.sock.identity());
     }
 
     /* TODO: create agent thread */
 
     /* if we get a socket error, we try to launch a new server */
-    if (conn.sock.has_error())
+    if (ch.sock.has_error())
     {
-        _close(&conn.sock);
+        _close(&ch.sock);
 
         /* get an atomic launch ticket, first caller is the leader */
         xi_nub_ticket ticket = xi_nub_get_ticket(agent->ctx);
@@ -365,56 +365,56 @@ void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb c
         xi_nub_sleep_on_ticket(agent->ctx, ticket);
 
         /* attempt to reconnect */
-        conn.sock = client_socket_connect(pipe_addr.c_str());
-        if (conn.sock.has_error()) {
-            cb(&conn, conn.sock.error_code());
+        ch.sock = client_socket_connect(pipe_addr.c_str());
+        if (ch.sock.has_error()) {
+            cb(&ch, ch.sock.error_code());
         } else {
-            cb(&conn, xi_nub_success);
+            cb(&ch, xi_nub_success);
         }
     } else {
-        cb(&conn, xi_nub_success);
+        cb(&ch, xi_nub_success);
     }
 }
 
 
 /*
- * nub connection io
+ * nub channel io
  */
 
-void xi_nub_conn_read(xi_nub_conn *conn, void *buf, size_t len, xi_nub_read_cb cb)
+void xi_nub_io_read(xi_nub_ch *ch, void *buf, size_t len, xi_nub_read_cb cb)
 {
-    xi_nub_result result = _read(&conn->sock, buf, len);
+    xi_nub_result result = _read(&ch->sock, buf, len);
     if (debug) {
-        printf("xi_nub_conn_read: sock=%s, len=%zu: ret=%zd, error=%d\n",
-            conn->sock.identity(), len, result.bytes, result.error);
+        printf("xi_nub_io_read: sock=%s, len=%zu: ret=%zd, error=%d\n",
+            ch->sock.identity(), len, result.bytes, result.error);
     }
-    if (cb) cb(conn, result.error, buf, result.bytes);
+    if (cb) cb(ch, result.error, buf, result.bytes);
 }
 
-void xi_nub_conn_write(xi_nub_conn *conn, void *buf, size_t len, xi_nub_write_cb cb)
+void xi_nub_io_write(xi_nub_ch *ch, void *buf, size_t len, xi_nub_write_cb cb)
 {
-    xi_nub_result result = _write(&conn->sock, buf, len);
+    xi_nub_result result = _write(&ch->sock, buf, len);
     if (debug) {
-        printf("xi_nub_conn_write: sock=%s, len=%zu: ret=%zd, error=%d\n",
-            conn->sock.identity(), len, result.bytes, result.error);
+        printf("xi_nub_io_write: sock=%s, len=%zu: ret=%zd, error=%d\n",
+            ch->sock.identity(), len, result.bytes, result.error);
     }
-    if (cb) cb(conn, result.error, buf, result.bytes);
+    if (cb) cb(ch, result.error, buf, result.bytes);
 }
 
-void xi_nub_conn_close(xi_nub_conn *conn, xi_nub_close_cb cb)
+void xi_nub_io_close(xi_nub_ch *ch, xi_nub_close_cb cb)
 {
-    bool is_server = conn->agent->listen_sock.desc_type() == xi_nub_desc_type_pipe_listen;
-    xi_nub_result result = is_server ? _disconnect(&conn->sock) : _close(&conn->sock);
+    bool is_server = ch->agent->listen_sock.desc_type() == xi_nub_desc_type_pipe_listen;
+    xi_nub_result result = is_server ? _disconnect(&ch->sock) : _close(&ch->sock);
     if (debug) {
-        printf("xi_nub_conn_close: sock=%s: ret=%zd, error=%d\n",
-            conn->sock.identity(), result.bytes, result.error);
+        printf("xi_nub_io_close: sock=%s: ret=%zd, error=%d\n",
+            ch->sock.identity(), result.bytes, result.error);
     }
-    if (cb) cb(conn, result.error);
+    if (cb) cb(ch, result.error);
 }
 
-const char* xi_nub_conn_get_identity(xi_nub_conn *conn)
+const char* xi_nub_io_get_identity(xi_nub_ch *ch)
 {
-    return conn->sock.identity();
+    return ch->sock.identity();
 }
 
 
@@ -424,10 +424,10 @@ const char* xi_nub_conn_get_identity(xi_nub_conn *conn)
 
 static xi_nub_ctx *global_nub_ctx;
 
-void xi_nub_conn_set_user_data(xi_nub_conn *conn, void *data) { conn->user_data = data; }
-void* xi_nub_conn_get_user_data(xi_nub_conn *conn) { return conn->user_data; }
-xi_nub_agent* xi_nub_conn_get_agent(xi_nub_conn *conn) { return conn->agent; }
-xi_nub_ctx* xi_nub_conn_get_context(xi_nub_conn *conn) { return conn->ctx; }
+void xi_nub_io_set_user_data(xi_nub_ch *ch, void *data) { ch->user_data = data; }
+void* xi_nub_io_get_user_data(xi_nub_ch *ch) { return ch->user_data; }
+xi_nub_agent* xi_nub_io_get_agent(xi_nub_ch *ch) { return ch->agent; }
+xi_nub_ctx* xi_nub_io_get_context(xi_nub_ch *ch) { return ch->ctx; }
 
 void xi_nub_ctx_set_user_data(xi_nub_ctx *ctx, void *data) { ctx->user_data = data; }
 void* xi_nub_ctx_get_user_data(xi_nub_ctx *ctx) { return ctx->user_data; }

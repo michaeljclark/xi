@@ -13,7 +13,7 @@
  * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ * OR IN chECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
 #pragma once
@@ -26,7 +26,7 @@ extern "C" {
 
 struct xi_nub_ctx;
 struct xi_nub_agent;
-struct xi_nub_conn;
+struct xi_nub_ch;
 
 typedef enum
 {
@@ -42,11 +42,11 @@ typedef enum
 	xi_nub_egeneric = 255
 } xi_nub_error;
 
-typedef void(*xi_nub_accept_cb)(xi_nub_conn *conn, xi_nub_error err);
-typedef void(*xi_nub_connect_cb)(xi_nub_conn *conn, xi_nub_error err);
-typedef void(*xi_nub_read_cb)(xi_nub_conn *conn, xi_nub_error err, void *buf, size_t len);
-typedef void(*xi_nub_write_cb)(xi_nub_conn *conn, xi_nub_error err, void *buf, size_t len);
-typedef void(*xi_nub_close_cb)(xi_nub_conn *conn, xi_nub_error err);
+typedef void(*xi_nub_accept_cb)(xi_nub_ch *ch, xi_nub_error err);
+typedef void(*xi_nub_connect_cb)(xi_nub_ch *ch, xi_nub_error err);
+typedef void(*xi_nub_read_cb)(xi_nub_ch *ch, xi_nub_error err, void *buf, size_t len);
+typedef void(*xi_nub_write_cb)(xi_nub_ch *ch, xi_nub_error err, void *buf, size_t len);
+typedef void(*xi_nub_close_cb)(xi_nub_ch *ch, xi_nub_error err);
 
 /* nub agent */
 xi_nub_agent* xi_nub_agent_new(xi_nub_ctx *ctx, int argc, const char **argv);
@@ -54,15 +54,15 @@ void xi_nub_agent_accept(xi_nub_agent *agent, int nthreads, xi_nub_accept_cb cb)
 void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb cb);
 void xi_nub_agent_destroy(xi_nub_agent *agent);
 
-/* nub connection */
-void xi_nub_conn_read(xi_nub_conn *conn, void *buf, size_t len, xi_nub_read_cb cb);
-void xi_nub_conn_write(xi_nub_conn *conn, void *buf, size_t len, xi_nub_write_cb cb);
-void xi_nub_conn_close(xi_nub_conn *conn, xi_nub_close_cb cb);
-void xi_nub_conn_set_user_data(xi_nub_conn *conn, void *data);
-void* xi_nub_conn_get_user_data(xi_nub_conn *conn);
-xi_nub_agent* xi_nub_conn_get_agent(xi_nub_conn *conn);
-xi_nub_ctx* xi_nub_conn_get_context(xi_nub_conn *conn);
-const char* xi_nub_conn_get_identity(xi_nub_conn *conn);
+/* nub channel */
+void xi_nub_io_read(xi_nub_ch *ch, void *buf, size_t len, xi_nub_read_cb cb);
+void xi_nub_io_write(xi_nub_ch *ch, void *buf, size_t len, xi_nub_write_cb cb);
+void xi_nub_io_close(xi_nub_ch *ch, xi_nub_close_cb cb);
+void xi_nub_io_set_user_data(xi_nub_ch *ch, void *data);
+void* xi_nub_io_get_user_data(xi_nub_ch *ch);
+xi_nub_agent* xi_nub_io_get_agent(xi_nub_ch *ch);
+xi_nub_ctx* xi_nub_io_get_context(xi_nub_ch *ch);
+const char* xi_nub_io_get_identity(xi_nub_ch *ch);
 
 /* nub context */
 xi_nub_ctx* xi_nub_ctx_create(const char *app_name);
