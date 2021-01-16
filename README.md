@@ -66,13 +66,13 @@ a subset of all query terms.
 
 ## Nubs
 
-_Xi_ supports a concept called _nubs_ which are session process
-activation stubs. _Nubs_ allow a client to create a session peer
+_Xi_ supports a concept called _nubs_ which are session activation and
+communication stubs. _Nubs_ allow an agent to create a session peer
 process with a different lifecycle to its own, hence the name _nub_.
 Nubs allow splitting the app into a command-line agent and session
 peer containing some cache, with the session peer process automatically
 started by the command-line tool. Subsequent invocations of the tool will
-connect to a previously created session peer process.
+connect to a previously created peer.
 
 ## Nub addresses
 
@@ -116,14 +116,14 @@ xi -t unicode blue
 🔹	U+1f539	SMALL BLUE DIAMOND
 🟦	U+1f7e6	LARGE BLUE SQUARE
 🫐	U+1fad0	BLUEBERRIES
-[nub-client] search = 254μs
+[nub-agent] search = 254μs
 ```
 
 ### Nub Locking
 
 Nubs use a locking protocol to ensure that only a single process is
-launched. When a nub clients attempt to connect to the server. if there
+launched. When a nub agent attempts to connect to the server. if there
 is no answer they will create a semaphore, writing its id to a file,
-a leader will be chosen to fork the nub child process and all clients
-will then wait on their semaphore. When server has started, it will
-read the list of semaphores and signal them waking up all of the clients.
+a leader will be chosen to fork the nub child process and all agents
+will then wait on their semaphore. When the server has started, it will
+read the list of semaphores and signal them, waking up all of the agents.

@@ -711,7 +711,7 @@ static void do_nub_client()
     if (timings_enabled)
     {
         auto tl = duration_cast<nanoseconds>(t2 - t1).count();
-        printf("[nub-client] search = %.fμs\n", tl / 1e3);
+        printf("[nub-agent] search = %.fμs\n", tl / 1e3);
     }
 }
 
