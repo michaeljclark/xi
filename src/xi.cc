@@ -576,10 +576,10 @@ static void xi_client_close_cb(xi_nub_ch *nch, xi_nub_error err)
     }
 }
 
-static void xi_client_req_write_cb(xi_nub_ch *nch, xi_nub_error err,
+static void xi_client_request_write_cb(xi_nub_ch *nch, xi_nub_error err,
     void *buf, size_t len);
 
-static void xi_client_res_read_cb(xi_nub_ch *nch, xi_nub_error err,
+static void xi_client_response_read_cb(xi_nub_ch *nch, xi_nub_error err,
     void *buf, size_t len)
 {
     xi_channel *ch = (xi_channel *)xi_nub_io_get_user_data(nch);
@@ -590,7 +590,7 @@ static void xi_client_res_read_cb(xi_nub_ch *nch, xi_nub_error err,
     }
 
     if (debug_enabled) {
-        printf("xi_client_res_read_cb: ch=%s, len=%zu\n",
+        printf("xi_client_response_read_cb: ch=%s, len=%zu\n",
             xi_nub_io_get_identity(nch), len);
     }
 
@@ -625,10 +625,10 @@ static void xi_client_res_read_cb(xi_nub_ch *nch, xi_nub_error err,
     ch->write_int8(0); /* 0 = shutdown */
     struct xi_channel::span out = ch->copy_output();
     ch->closing = 1;
-    xi_nub_io_write(nch, out.data, out.length, xi_client_req_write_cb);
+    xi_nub_io_write(nch, out.data, out.length, xi_client_request_write_cb);
 }
 
-static void xi_client_req_write_cb(xi_nub_ch *nch, xi_nub_error err,
+static void xi_client_request_write_cb(xi_nub_ch *nch, xi_nub_error err,
     void *buf, size_t len)
 {
     xi_channel *ch = (xi_channel *)xi_nub_io_get_user_data(nch);
@@ -639,7 +639,7 @@ static void xi_client_req_write_cb(xi_nub_ch *nch, xi_nub_error err,
     }
 
     if (debug_enabled) {
-        printf("xi_client_req_write_cb: ch=%s, len=%zu\n",
+        printf("xi_client_request_write_cb: ch=%s, len=%zu\n",
             xi_nub_io_get_identity(nch), len);
     }
 
@@ -651,7 +651,7 @@ static void xi_client_req_write_cb(xi_nub_ch *nch, xi_nub_error err,
     /* read response */
     ch->reset();
     struct xi_channel::span in = ch->copy_remaining();
-    xi_nub_io_read(nch, in.data, in.length, xi_client_res_read_cb);
+    xi_nub_io_read(nch, in.data, in.length, xi_client_response_read_cb);
 }
 
 static void xi_client_connect_cb(xi_nub_ch *nch, xi_nub_error err)
@@ -679,7 +679,7 @@ static void xi_client_connect_cb(xi_nub_ch *nch, xi_nub_error err)
     ch->write_int8(1); /* 1 = search */
     ch->write_string(request.data(), request.size());
     struct xi_channel::span out = ch->copy_output();
-    xi_nub_io_write(nch, out.data, out.length, xi_client_req_write_cb);
+    xi_nub_io_write(nch, out.data, out.length, xi_client_request_write_cb);
 }
 
 static void do_nub_client()
@@ -740,10 +740,10 @@ static void xi_server_close_cb(xi_nub_ch *nch, xi_nub_error err)
     }
 }
 
-static void xi_server_req_read_cb(xi_nub_ch *nch, xi_nub_error err,
+static void xi_server_request_read_cb(xi_nub_ch *nch, xi_nub_error err,
     void *buf, size_t len);
 
-static void xi_server_res_write_cb(xi_nub_ch *nch, xi_nub_error err,
+static void xi_server_response_write_cb(xi_nub_ch *nch, xi_nub_error err,
     void *buf, size_t len)
 {
     xi_channel *ch = (xi_channel *)xi_nub_io_get_user_data(nch);
@@ -754,17 +754,17 @@ static void xi_server_res_write_cb(xi_nub_ch *nch, xi_nub_error err,
     }
 
     if (debug_enabled) {
-        printf("xi_server_res_write_cb: ch=%s, len=%zu\n",
+        printf("xi_server_response_write_cb: ch=%s, len=%zu\n",
             xi_nub_io_get_identity(nch), len);
     }
 
     /* issue read request for next command */
     ch->reset();
     struct xi_channel::span in = ch->copy_remaining();
-    xi_nub_io_read(nch, in.data, in.length, xi_server_req_read_cb);
+    xi_nub_io_read(nch, in.data, in.length, xi_server_request_read_cb);
 }
 
-static void xi_server_req_read_cb(xi_nub_ch *nch, xi_nub_error err,
+static void xi_server_request_read_cb(xi_nub_ch *nch, xi_nub_error err,
     void *buf, size_t len)
 {
     xi_channel *ch = (xi_channel *)xi_nub_io_get_user_data(nch);
@@ -775,7 +775,7 @@ static void xi_server_req_read_cb(xi_nub_ch *nch, xi_nub_error err,
     }
 
     if (debug_enabled) {
-        printf("xi_server_req_read_cb: ch=%s, len=%zu\n",
+        printf("xi_server_request_read_cb: ch=%s, len=%zu\n",
             xi_nub_io_get_identity(nch), len);
     }
 
@@ -878,7 +878,7 @@ static void xi_server_req_read_cb(xi_nub_ch *nch, xi_nub_error err,
         ch->write_string(r[i].Name.data(), r[i].Name.size());
     }
     struct xi_channel::span out = ch->copy_output();
-    xi_nub_io_write(nch, out.data, out.length, xi_server_res_write_cb);
+    xi_nub_io_write(nch, out.data, out.length, xi_server_response_write_cb);
 }
 
 static void xi_server_accept_cb(xi_nub_ch *nch, xi_nub_error err)
@@ -898,7 +898,7 @@ static void xi_server_accept_cb(xi_nub_ch *nch, xi_nub_error err)
     /* read request */
     ch->reset();
     struct xi_channel::span in = ch->copy_remaining();
-    xi_nub_io_read(nch, in.data, in.length, xi_server_req_read_cb);
+    xi_nub_io_read(nch, in.data, in.length, xi_server_request_read_cb);
 }
 
 static void do_nub_server()
