@@ -51,8 +51,6 @@ typedef void(*xi_nub_close_cb)(xi_nub_ch *ch, xi_nub_error err);
 /* nub context */
 xi_nub_ctx* xi_nub_ctx_create(const char *app_name);
 void xi_nub_ctx_destroy(xi_nub_ctx *ctx);
-xi_nub_ctx* xi_nub_ctx_get_root_context();
-const char* xi_nub_ctx_get_profile_path(xi_nub_ctx *ctx);
 void xi_nub_ctx_set_user_data(xi_nub_ctx *ctx, void *data);
 void* xi_nub_ctx_get_user_data(xi_nub_ctx *ctx);
 
@@ -71,6 +69,10 @@ void* xi_nub_io_get_user_data(xi_nub_ch *ch);
 xi_nub_agent* xi_nub_io_get_agent(xi_nub_ch *ch);
 xi_nub_ctx* xi_nub_io_get_context(xi_nub_ch *ch);
 const char* xi_nub_io_get_identity(xi_nub_ch *ch);
+
+/* nub profile */
+xi_nub_ctx* xi_nub_ctx_get_initial_context();
+const char* xi_nub_ctx_get_profile_path(xi_nub_ctx *ctx);
 
 #ifdef __cplusplus
 }

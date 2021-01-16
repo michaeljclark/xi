@@ -432,7 +432,7 @@ xi_nub_ctx* xi_nub_io_get_context(xi_nub_ch *ch) { return ch->ctx; }
 void xi_nub_ctx_set_user_data(xi_nub_ctx *ctx, void *data) { ctx->user_data = data; }
 void* xi_nub_ctx_get_user_data(xi_nub_ctx *ctx) { return ctx->user_data; }
 const char* xi_nub_ctx_get_profile_path(xi_nub_ctx *ctx) { return ctx->profile_path.c_str(); }
-xi_nub_ctx* xi_nub_ctx_get_root_context() { return global_nub_ctx; }
+xi_nub_ctx* xi_nub_ctx_get_initial_context() { return global_nub_ctx; }
 
 
 /*

@@ -1175,7 +1175,7 @@ typedef xi_nub_unix_desc xi_nub_platform_desc;
 #if defined OS_MACOS || defined OS_FREEBSD
 static size_t _unix_pipe_address(sockaddr_un *saddr, const char *path)
 {
-    xi_nub_ctx *ctx = xi_nub_ctx_get_root_context();
+    xi_nub_ctx *ctx = xi_nub_ctx_get_initial_context();
     const char *profile = xi_nub_ctx_get_profile_path(ctx);
 
     memset(saddr, 0, sizeof(*saddr));
