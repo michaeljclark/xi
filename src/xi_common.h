@@ -1164,45 +1164,7 @@ static xi_nub_platform_desc _client_socket_connect(const char *pipe_path)
 
 
 /*
- * posix sockets
- */
-
-#if defined OS_POSIX
-typedef xi_nub_unix_desc xi_nub_platform_desc;
-#endif
-
-#if defined OS_MACOS || defined OS_FREEBSD
-static size_t _unix_pipe_address(sockaddr_un *saddr, const char *path)
-{
-    xi_nub_ctx *ctx = xi_nub_ctx_get_initial_context();
-    const char *profile = xi_nub_ctx_get_profile_path(ctx);
-
-    memset(saddr, 0, sizeof(*saddr));
-    saddr->sun_family = AF_UNIX;
-
-#if defined OS_MACOS
-    return snprintf(saddr->sun_path, sizeof(saddr->sun_path),
-                    "%s/%s", profile, path);
-#else
-    snprintf(saddr->sun_path, sizeof(saddr->sun_path),
-                    "%s/%s", profile, path);
-    return offsetof(sockaddr_un,sun_path) + strlen(saddr->sun_path) + 1;
-#endif
-}
-#elif defined OS_POSIX
-static size_t _unix_pipe_address(sockaddr_un *saddr, const char *pipe_path)
-{
-    memset(saddr, 0, sizeof(*saddr));
-    saddr->sun_family = AF_UNIX;
-    memcpy(saddr->sun_path + 1, pipe_path, strlen(pipe_path) + 1);
-
-    return offsetof(sockaddr_un,sun_path) + strlen(pipe_path) + 1;
-}
-#endif
-
-
-/*
- * list of files to delete on exit
+ * posix signal handler for deleting files on exit
  */
 
 #if defined OS_POSIX
@@ -1245,6 +1207,44 @@ static void _install_signal_handler()
     sigaction(SIGTERM, &sigaction_handler, nullptr);
     sigaction(SIGINT, &sigaction_handler, nullptr);
     sigaction(SIGHUP, &sigaction_handler, nullptr);
+}
+#endif
+
+
+/*
+ * posix sockets
+ */
+
+#if defined OS_POSIX
+typedef xi_nub_unix_desc xi_nub_platform_desc;
+#endif
+
+#if defined OS_MACOS || defined OS_FREEBSD
+static size_t _unix_pipe_address(sockaddr_un *saddr, const char *path)
+{
+    xi_nub_ctx *ctx = xi_nub_ctx_get_initial_context();
+    const char *profile = xi_nub_ctx_get_profile_path(ctx);
+
+    memset(saddr, 0, sizeof(*saddr));
+    saddr->sun_family = AF_UNIX;
+
+#if defined OS_MACOS
+    return snprintf(saddr->sun_path, sizeof(saddr->sun_path),
+                    "%s/%s", profile, path);
+#else
+    snprintf(saddr->sun_path, sizeof(saddr->sun_path),
+                    "%s/%s", profile, path);
+    return offsetof(sockaddr_un,sun_path) + strlen(saddr->sun_path) + 1;
+#endif
+}
+#elif defined OS_POSIX
+static size_t _unix_pipe_address(sockaddr_un *saddr, const char *pipe_path)
+{
+    memset(saddr, 0, sizeof(*saddr));
+    saddr->sun_family = AF_UNIX;
+    memcpy(saddr->sun_path + 1, pipe_path, strlen(pipe_path) + 1);
+
+    return offsetof(sockaddr_un,sun_path) + strlen(pipe_path) + 1;
 }
 #endif
 
