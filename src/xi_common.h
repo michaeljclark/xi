@@ -120,7 +120,9 @@ enum xi_nub_desc_type
     xi_nub_desc_type_semaphore,
     xi_nub_desc_type_pipe_listen,
     xi_nub_desc_type_pipe_accepted,
-    xi_nub_desc_type_pipe_connected
+    xi_nub_desc_type_pipe_connected,
+    xi_nub_desc_type_pipe_read,
+    xi_nub_desc_type_pipe_write
 };
 
 struct xi_nub_result
@@ -1079,6 +1081,35 @@ static xi_pid_t _get_processs_id()
 
 #if defined OS_WINDOWS
 typedef xi_nub_win32_desc xi_nub_platform_desc;
+
+struct xi_nub_win32_pipe
+{
+    xi_nub_win32_desc rdesc;
+    xi_nub_win32_desc wdesc;
+};
+
+typedef xi_nub_win32_pipe xi_nub_platform_pipe;
+#endif
+
+#if defined OS_WINDOWS
+static xi_nub_platform_pipe _pipe_create()
+{
+    HANDLE rh, wh;
+    DWORD buf_size = 65536;
+
+    BOOL ret = CreatePipe(&rh, &wh, NULL, buf_size);
+    if (ret) {
+        return xi_nub_platform_pipe{
+            xi_nub_platform_desc(rh, 0, xi_nub_desc_type_pipe_read),
+            xi_nub_platform_desc(wh, 0, xi_nub_desc_type_pipe_write)
+        };
+    } else {
+        return xi_nub_platform_pipe{
+            xi_nub_platform_desc(INVALID_HANDLE_VALUE, GetLastError()),
+            xi_nub_platform_desc(INVALID_HANDLE_VALUE, GetLastError()),
+        };
+    }
+}
 #endif
 
 #if defined OS_WINDOWS
@@ -1217,6 +1248,33 @@ static void _install_signal_handler()
 
 #if defined OS_POSIX
 typedef xi_nub_unix_desc xi_nub_platform_desc;
+
+struct xi_nub_unix_pipe
+{
+    xi_nub_unix_desc rdesc;
+    xi_nub_unix_desc wdesc;
+};
+
+typedef xi_nub_unix_pipe xi_nub_platform_pipe;
+#endif
+
+#if defined OS_POSIX
+static xi_nub_platform_pipe _pipe_create()
+{
+    int pfd[2];
+    int ret = pipe(pfd);
+    if (ret == 0) {
+        return xi_nub_platform_pipe{
+            xi_nub_platform_desc(pfd[0], 0, xi_nub_desc_type_pipe_read),
+            xi_nub_platform_desc(pfd[1], 0, xi_nub_desc_type_pipe_write)
+        };
+    } else {
+        return xi_nub_platform_pipe{
+            xi_nub_platform_desc(-1, errno),
+            xi_nub_platform_desc(-1, errno),
+        };
+    }
+}
 #endif
 
 #if defined OS_MACOS || defined OS_FREEBSD
