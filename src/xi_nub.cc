@@ -226,7 +226,7 @@ static void xi_nub_wake_all_waiters(xi_nub_ctx *ctx)
 void xi_nub_agent_accept(xi_nub_agent *agent, int nthreads, xi_nub_accept_cb cb)
 {
     string pipe_addr = _get_nub_addr(agent->ctx, agent->args);
-    agent->listen_sock = listen_socket_create(pipe_addr.c_str());
+    agent->listen_sock = _listen_socket_create(pipe_addr.c_str());
     if (debug) {
         printf("xi_nub_agent_accept: listening sock=%s\n",
             agent->listen_sock.identity());
@@ -244,7 +244,7 @@ void xi_nub_agent_accept(xi_nub_agent *agent, int nthreads, xi_nub_accept_cb cb)
 
     for (;;) {
         xi_nub_ch ch{
-            agent->ctx, agent, listen_socket_accept(agent->listen_sock)
+            agent->ctx, agent, _listen_socket_accept(agent->listen_sock)
         };
 
         if (debug) {
@@ -336,7 +336,7 @@ void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb c
     string pipe_addr = _get_nub_addr(agent->ctx, agent->args);
 
     xi_nub_ch ch{
-        agent->ctx, agent, client_socket_connect(pipe_addr.c_str())
+        agent->ctx, agent, _client_socket_connect(pipe_addr.c_str())
     };
 
     if (debug) {
@@ -365,7 +365,7 @@ void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb c
         xi_nub_sleep_on_ticket(agent->ctx, ticket);
 
         /* attempt to reconnect */
-        ch.sock = client_socket_connect(pipe_addr.c_str());
+        ch.sock = _client_socket_connect(pipe_addr.c_str());
         if (ch.sock.has_error()) {
             cb(&ch, ch.sock.error_code());
         } else {

@@ -1082,7 +1082,7 @@ typedef xi_nub_win32_desc xi_nub_platform_desc;
 #endif
 
 #if defined OS_WINDOWS
-static xi_nub_platform_desc listen_socket_create(const char *pipe_path)
+static xi_nub_platform_desc _listen_socket_create(const char *pipe_path)
 {
     DWORD open_mode = PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED;
     DWORD pipe_mode = PIPE_READMODE_MESSAGE | PIPE_TYPE_MESSAGE | PIPE_WAIT;
@@ -1105,7 +1105,7 @@ static xi_nub_platform_desc listen_socket_create(const char *pipe_path)
 #endif
 
 #if defined OS_WINDOWS
-static xi_nub_platform_desc listen_socket_accept(xi_nub_platform_desc l)
+static xi_nub_platform_desc _listen_socket_accept(xi_nub_platform_desc l)
 {
     /*
      * we only connect one socket and then must create a new pipe
@@ -1142,7 +1142,7 @@ retry:
 #endif
 
 #if defined OS_WINDOWS
-static xi_nub_platform_desc client_socket_connect(const char *pipe_path)
+static xi_nub_platform_desc _client_socket_connect(const char *pipe_path)
 {
     wstring wpipe_path = L"\\\\.\\pipe\\";
     wpipe_path.append(utf8_to_utf16(pipe_path));
@@ -1223,7 +1223,7 @@ static void _delete_file_on_exit(string file) {
     _get_unlink_list().push_back(file);
 }
 
-static void signal_handler(int signum, siginfo_t *info, void *)
+static void _signal_handler(int signum, siginfo_t *info, void *)
 {
     switch (signum) {
         case SIGTERM:
@@ -1240,7 +1240,7 @@ static void _install_signal_handler()
 {
     struct sigaction sigaction_handler;
     memset(&sigaction_handler, 0, sizeof(sigaction_handler));
-    sigaction_handler.sa_sigaction = signal_handler;
+    sigaction_handler.sa_sigaction = _signal_handler;
     sigaction_handler.sa_flags = SA_SIGINFO;
     sigaction(SIGTERM, &sigaction_handler, nullptr);
     sigaction(SIGINT, &sigaction_handler, nullptr);
@@ -1249,7 +1249,7 @@ static void _install_signal_handler()
 #endif
 
 #if defined OS_POSIX
-static xi_nub_platform_desc listen_socket_create(const char *pipe_path)
+static xi_nub_platform_desc _listen_socket_create(const char *pipe_path)
 {
     sockaddr_un saddr;
 
@@ -1289,7 +1289,7 @@ static xi_nub_platform_desc listen_socket_create(const char *pipe_path)
 #endif
 
 #if defined OS_POSIX
-static xi_nub_platform_desc listen_socket_accept(xi_nub_platform_desc l)
+static xi_nub_platform_desc _listen_socket_accept(xi_nub_platform_desc l)
 {
     struct sockaddr saddr;
     socklen_t saddrlen = sizeof(saddr);
@@ -1305,7 +1305,7 @@ static xi_nub_platform_desc listen_socket_accept(xi_nub_platform_desc l)
 #endif
 
 #if defined OS_POSIX
-static xi_nub_platform_desc client_socket_connect(const char *pipe_path)
+static xi_nub_platform_desc _client_socket_connect(const char *pipe_path)
 {
     sockaddr_un saddr;
 
