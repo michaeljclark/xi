@@ -53,7 +53,6 @@ static const char* unicode_data_file = "data/13.0.0/UnicodeData.txt";
 static bool help_text = false;
 static bool standalone_search = false;
 static bool nub_server = false;
-static bool debug_enabled = false;
 static bool timings_enabled = false;
 static bool optimized_search = true;
 static vector<string> unicode_search_terms;
@@ -132,8 +131,7 @@ vector<unicode_data> read_unicode_data()
     const char* p;
 
     if ((f = fopen(unicode_data_file, "r")) == nullptr) {
-        fprintf(stderr, "fopen: %s\n", strerror(errno));
-        exit(1);
+        _panic("fopen: %s\n", strerror(errno));
     }
     while((p = fgets(buf, sizeof(buf), f)) != nullptr) {
         string l(p);
@@ -487,10 +485,8 @@ template <typename INT, typename SWAP> size_t xi_channel::write_int(INT num, SWA
     if (offset + sizeof(num) > length) return 0;
     INT t = f(num);
     memcpy(&buf[offset], &t, sizeof(INT));
-    if (debug_enabled) {
-        printf("write_int%zu: offset=%zu, value=%lld\n",
-            sizeof(num)<<3, offset, (long long)num);
-    }
+    _debug_func("bits=%zu, offset=%zu, value=%lld\n",
+                sizeof(num)<<3, offset, (long long)num);
     offset += sizeof(num);
     return sizeof(num);
 }
@@ -500,10 +496,8 @@ size_t xi_channel::write_string(const char *s, size_t len)
     size_t ret = write_int64(len);
     if (ret == 0 || offset + len > length) return 0;
     memcpy(&buf[offset], s, len);
-    if (debug_enabled) {
-        printf("write_string: offset=%zu, len=%zu, value=\"%s\"\n",
-            offset, len, string(&buf[offset], len).c_str());
-    }
+    _debug_func("length=%zu, offset=%zu, value=\"%s\"\n",
+                len, offset, string(&buf[offset], len).c_str());
     offset += len;
     return len + ret;
 }
@@ -514,10 +508,8 @@ template <typename INT, typename SWAP> size_t xi_channel::read_int(INT *num, SWA
     INT t;
     memcpy(&t, &buf[offset], sizeof(INT));
     *num = f(t);
-    if (debug_enabled) {
-        printf("read_int%zu: offset=%zu, value=%lld\n",
-            sizeof(num)<<3, offset, (long long)*num);
-    }
+    _debug_func("bits=%zu, offset=%zu, value=%lld\n",
+                sizeof(num)<<3, offset, (long long)*num);
     offset += sizeof(*num);
     return sizeof(*num);
 }
@@ -529,10 +521,8 @@ size_t xi_channel::read_string(char *s, size_t buf_len, size_t *str_len)
     if (ret == 0 || offset + len64 > length) return 0;
     if ((size_t)len64 > buf_len) len64 = buf_len;
     memcpy(s, &buf[offset], len64);
-    if (debug_enabled) {
-        printf("read_string: offset=%zu, len=%" PRIu64 ", value=\"%s\"\n",
-             offset, len64, string(&buf[offset], len64).c_str());
-    }
+    _debug_func("length=%" PRIu64 ", offset=%zu, value=\"%s\"\n",
+                len64, offset, string(&buf[offset], len64).c_str());
     offset += len64;
     if (str_len) *str_len = len64;
     return len64 + ret;
@@ -571,9 +561,7 @@ static void xi_client_close_cb(xi_nub_ch *nch, xi_nub_error err)
         return;
     }
 
-    if (debug_enabled) {
-        printf("xi_client_close_cb:\n");
-    }
+    _debug_mark();
 }
 
 static void xi_client_request_write_cb(xi_nub_ch *nch, xi_nub_error err,
@@ -589,10 +577,7 @@ static void xi_client_response_read_cb(xi_nub_ch *nch, xi_nub_error err,
         return;
     }
 
-    if (debug_enabled) {
-        printf("xi_client_response_read_cb: ch=%s, len=%zu\n",
-            xi_nub_io_get_identity(nch), len);
-    }
+    _debug_func("ch=%s, len=%zu\n", xi_nub_io_get_identity(nch), len);
 
     ch->copy_input(xi_channel::span{buf, len});
 
@@ -638,10 +623,7 @@ static void xi_client_request_write_cb(xi_nub_ch *nch, xi_nub_error err,
         return;
     }
 
-    if (debug_enabled) {
-        printf("xi_client_request_write_cb: ch=%s, len=%zu\n",
-            xi_nub_io_get_identity(nch), len);
-    }
+    _debug_func("ch=%s, len=%zu\n", xi_nub_io_get_identity(nch), len);
 
     if (ch->closing) {
         xi_nub_io_close(nch, xi_client_close_cb);
@@ -661,10 +643,6 @@ static void xi_client_connect_cb(xi_nub_ch *nch, xi_nub_error err)
         return;
     }
 
-    if (debug_enabled) {
-        printf("xi_client_connect_cb\n");
-    }
-
     xi_channel *ch = new xi_channel{};
     xi_nub_io_set_user_data(nch, ch);
 
@@ -672,7 +650,7 @@ static void xi_client_connect_cb(xi_nub_ch *nch, xi_nub_error err)
     string request = join(unicode_search_terms, " ", 0, unicode_search_terms.size());
 
     /* debug print request */
-    if (debug_enabled) printf("request: %s\n", request.c_str());
+    _debug_func("request: %s\n", request.c_str());
 
     /* write request */
     ch->reset();
@@ -690,10 +668,7 @@ static void do_nub_client()
     SetConsoleOutputCP(CP_UTF8);
 #endif
 
-    if (debug_enabled) {
-        printf("\n-- Xi nub-client\n");
-        printf("profile_path = \"%s\";\n", xi_nub_ctx_get_profile_path(ctx));
-    }
+    _debug_func("profile_path = \"%s\";\n", xi_nub_ctx_get_profile_path(ctx));
 
     /* start client */
     const char* args[] = { "<self>", "nub-server" };
@@ -735,9 +710,7 @@ static void xi_server_close_cb(xi_nub_ch *nch, xi_nub_error err)
         return;
     }
 
-    if (debug_enabled) {
-        printf("xi_server_close_cb\n");
-    }
+    _debug_mark();
 }
 
 static void xi_server_request_read_cb(xi_nub_ch *nch, xi_nub_error err,
@@ -753,10 +726,7 @@ static void xi_server_response_write_cb(xi_nub_ch *nch, xi_nub_error err,
         return;
     }
 
-    if (debug_enabled) {
-        printf("xi_server_response_write_cb: ch=%s, len=%zu\n",
-            xi_nub_io_get_identity(nch), len);
-    }
+    _debug_func("ch=%s, len=%zu\n", xi_nub_io_get_identity(nch), len);
 
     /* issue read request for next command */
     ch->reset();
@@ -774,10 +744,7 @@ static void xi_server_request_read_cb(xi_nub_ch *nch, xi_nub_error err,
         return;
     }
 
-    if (debug_enabled) {
-        printf("xi_server_request_read_cb: ch=%s, len=%zu\n",
-            xi_nub_io_get_identity(nch), len);
-    }
+    _debug_func("ch=%s, len=%zu\n", xi_nub_io_get_identity(nch), len);
 
     ch->copy_input(xi_channel::span{buf, len});
 
@@ -839,12 +806,12 @@ static void xi_server_request_read_cb(xi_nub_ch *nch, xi_nub_error err,
     }
 
     /* debug print request and response */
-    if (debug_enabled) {
-        printf("request: %s\n", request.c_str());
+    if (_debug_enabled) {
+        _debug_func("request: %s\n", request.c_str());
         for (size_t i = 0; i < r.size(); i++) {
             char buf[5];
             utf32_to_utf8(buf, sizeof(buf), r[i].Code);
-            printf("response: %s\tU+%04x\t%s\n", buf, r[i].Code, r[i].Name.c_str());
+            _debug_func("response: %s\tU+%04x\t%s\n", buf, r[i].Code, r[i].Name.c_str());
         }
     }
 
@@ -888,9 +855,7 @@ static void xi_server_accept_cb(xi_nub_ch *nch, xi_nub_error err)
         return;
     }
 
-    if (debug_enabled) {
-        printf("xi_server_accept_cb\n");
-    }
+    _debug_mark();
 
     xi_channel *ch = new xi_channel{};
     xi_nub_io_set_user_data(nch, ch);
@@ -905,10 +870,7 @@ static void do_nub_server()
 {
     xi_nub_ctx *ctx = xi_nub_ctx_create("Xi");
 
-    if (debug_enabled) {
-        printf("\n-- Xi nub-server\n");
-        printf("profile_path = \"%s\";\n", xi_nub_ctx_get_profile_path(ctx));
-    }
+    _debug_func("profile_path = \"%s\";\n", xi_nub_ctx_get_profile_path(ctx));
 
     /* start server */
     const char* args[] = { "<self>", "nub-server" };
@@ -1019,7 +981,7 @@ static bool parse_options(int argc, char **argv)
             if (check_param(++i == argc, "--unicode-data")) break;
             unicode_data_file = argv[i++];
         } else if (match_option(argv[i], "-d", "--debug")) {
-            debug_enabled = true;
+            _debug_enabled = true;
             i++;
         } else if (match_option(argv[i], "-t", "--timings")) {
             timings_enabled = true;

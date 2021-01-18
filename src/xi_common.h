@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <cstddef>
 #include <csignal>
+#include <cstdarg>
 #include <cerrno>
 
 #include <string>
@@ -85,12 +86,6 @@ template <typename T> using vector = std::vector<T>;
 #define PATH_SEPARATOR "/"
 #endif
 
-/*
- * nub globals
- */
-
-static bool debug = false;
-
 
 /*
  * nub private structures
@@ -143,6 +138,25 @@ struct xi_nub_desc
 
 inline xi_nub_desc::~xi_nub_desc() {}
 
+
+/*
+ * error logging
+ */
+
+static void _panic(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    exit(9);
+}
+
+static bool _debug_enabled = false;
+
+#define _debug(...) if (_debug_enabled) { printf(__VA_ARGS__); }
+#define _debug_func(fmt,...) if (_debug_enabled) { printf("%s: " fmt, __func__, __VA_ARGS__); }
+#define _debug_mark() if (_debug_enabled) { printf("%s\n", __func__); }
 
 /*
  * platform error mapping
@@ -613,7 +627,7 @@ static xi_nub_os_process _create_process(int argc, const char **argv)
 
     if (argc < 1) return xi_nub_os_process{};
 
-    if (debug) {
+    if (_debug_enabled) {
         for (size_t i = 0; i < argc; i++) {
             printf("exec[%zu]=\"%s\"\n", i, argv[i]);
         }
@@ -655,7 +669,7 @@ static xi_nub_os_process _create_process(int argc, const char **argv)
 {
     if (argc < 1) return xi_nub_os_process{};
 
-    if (debug) {
+    if (_debug_enabled) {
         for (size_t i = 0; i < argc; i++) {
             printf("exec[%zu]=\"%s\"\n", i, argv[i]);
         }

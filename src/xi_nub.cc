@@ -171,9 +171,7 @@ xi_nub_agent* xi_nub_agent_new(xi_nub_ctx *ctx, int argc, const char **argv)
     xi_nub_agent *agent = new xi_nub_agent();
     agent->ctx = ctx;
     agent->args = _get_args(argc, argv);
-    if (debug) {
-        printf("xi_nub_agent_new: agent=%p\n", agent);
-    }
+    _debug_func("agent=%p\n", agent);
     return agent;
 }
 
@@ -207,13 +205,9 @@ static void xi_nub_wake_all_waiters(xi_nub_ctx *ctx)
         snprintf(sem_name, sizeof(sem_name), "%s-%u", ctx->app_name.c_str(), pid);
         xi_nub_platform_semaphore sem = _semaphore_open(sem_name);
         if (sem.has_error()) {
-            fprintf(stderr, "error: _semaphore_open: error_code=%d\n",
-                    sem.error_code());
-            exit(1);
+            _panic("error: _semaphore_open: error_code=%d\n", sem.error_code());
         }
-        if (debug) {
-            printf("xi_nub_wake_all_waiters: semaphore=%s *** signal ***\n", sem_name);
-        }
+        _debug_func("semaphore=%s *** signal ***\n", sem_name);
         _semaphore_signal(&sem);
         _semaphore_unlink(sem_name);
         _semaphore_close(&sem);
@@ -227,16 +221,13 @@ void xi_nub_agent_accept(xi_nub_agent *agent, int nthreads, xi_nub_accept_cb cb)
 {
     string pipe_addr = _get_nub_addr(agent->ctx, agent->args);
     agent->listen_sock = _listen_socket_create(pipe_addr.c_str());
-    if (debug) {
-        printf("xi_nub_agent_accept: listening sock=%s\n",
-            agent->listen_sock.identity());
-    }
 
     if (agent->listen_sock.has_error()) {
-        fprintf(stderr, "error: listen_socket_create failed: error=%d\n",
+        _panic("error: listen_socket_create failed: error=%d\n",
             agent->listen_sock.error_code());
-        exit(1);
     }
+
+    _debug_func("listening sock=%s\n", agent->listen_sock.identity());
 
     xi_nub_wake_all_waiters(agent->ctx);
 
@@ -247,9 +238,7 @@ void xi_nub_agent_accept(xi_nub_agent *agent, int nthreads, xi_nub_accept_cb cb)
             agent->ctx, agent, _listen_socket_accept(agent->listen_sock)
         };
 
-        if (debug) {
-            printf("xi_nub_agent_accept: accepted sock=%s\n", ch.sock.identity());
-        }
+        _debug_func("accepted sock=%s\n", ch.sock.identity());
 
         if (ch.sock.has_error()) {
             cb(&ch, ch.sock.error_code());
@@ -298,10 +287,8 @@ static xi_nub_ticket xi_nub_get_ticket(xi_nub_ctx *ctx)
     uint32_t ticket = (uint32_t)off.bytes >> 2;
     _close(&f);
 
-    if (debug) {
-        printf("%s: ticket=%u, is_leader=%u, pid=%u, file=%s\n",
+    _debug("%s: ticket=%u, is_leader=%u, pid=%u, file=%s\n",
             __func__, ticket, is_leader, pid, obj.name);
-    }
 
     return xi_nub_ticket{ticket, pid, is_leader, obj };
 }
@@ -312,12 +299,9 @@ static void xi_nub_sleep_on_ticket(xi_nub_ctx *ctx, xi_nub_ticket ticket)
     snprintf(sem_name, sizeof(sem_name), "%s-%u", ctx->app_name.c_str(), ticket.pid);
     xi_nub_platform_semaphore sem = _semaphore_create(sem_name);
     if (sem.has_error()) {
-        fprintf(stderr, "error: _semaphore_create: error_code=%d\n", sem.error_code());
-        exit(1);
+        _panic("error: _semaphore_create: error_code=%d\n", sem.error_code());
     }
-    if (debug) {
-        printf("xi_nub_sleep_on_ticket: semaphore=%s *** created ***\n", sem_name);
-    }
+    _debug_func("semaphore=%s *** created ***\n", sem_name);
 
     _semaphore_wait(&sem, 15000);
 
@@ -326,9 +310,7 @@ static void xi_nub_sleep_on_ticket(xi_nub_ctx *ctx, xi_nub_ticket ticket)
     _thread_sleep(100);
 #endif
 
-    if (debug) {
-        printf("xi_nub_sleep_on_ticket: semaphore=%s *** woke up ***\n", sem_name);
-    }
+    _debug_func("semaphore=%s *** woke up ***\n", sem_name);
 }
 
 void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb cb)
@@ -339,9 +321,7 @@ void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb c
         agent->ctx, agent, _client_socket_connect(pipe_addr.c_str())
     };
 
-    if (debug) {
-        printf("xi_nub_agent_connect: sock=%s\n", ch.sock.identity());
-    }
+    _debug_func("sock=%s\n", ch.sock.identity());
 
     /* TODO: create agent thread */
 
@@ -384,20 +364,16 @@ void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb c
 void xi_nub_io_read(xi_nub_ch *ch, void *buf, size_t len, xi_nub_read_cb cb)
 {
     xi_nub_result result = _read(&ch->sock, buf, len);
-    if (debug) {
-        printf("xi_nub_io_read: sock=%s, len=%zu: ret=%zd, error=%d\n",
-            ch->sock.identity(), len, result.bytes, result.error);
-    }
+    _debug_func("sock=%s, len=%zu: ret=%zd, error=%d\n",
+                ch->sock.identity(), len, result.bytes, result.error);
     if (cb) cb(ch, result.error, buf, result.bytes);
 }
 
 void xi_nub_io_write(xi_nub_ch *ch, void *buf, size_t len, xi_nub_write_cb cb)
 {
     xi_nub_result result = _write(&ch->sock, buf, len);
-    if (debug) {
-        printf("xi_nub_io_write: sock=%s, len=%zu: ret=%zd, error=%d\n",
-            ch->sock.identity(), len, result.bytes, result.error);
-    }
+    _debug_func("sock=%s, len=%zu: ret=%zd, error=%d\n",
+                ch->sock.identity(), len, result.bytes, result.error);
     if (cb) cb(ch, result.error, buf, result.bytes);
 }
 
@@ -405,10 +381,8 @@ void xi_nub_io_close(xi_nub_ch *ch, xi_nub_close_cb cb)
 {
     bool is_server = ch->agent->listen_sock.desc_type() == xi_nub_desc_type_pipe_listen;
     xi_nub_result result = is_server ? _disconnect(&ch->sock) : _close(&ch->sock);
-    if (debug) {
-        printf("xi_nub_io_close: sock=%s: ret=%zd, error=%d\n",
-            ch->sock.identity(), result.bytes, result.error);
-    }
+    _debug_func("sock=%s: ret=%zd, error=%d\n",
+                ch->sock.identity(), result.bytes, result.error);
     if (cb) cb(ch, result.error);
 }
 
@@ -448,7 +422,7 @@ static void xi_nub_init(xi_nub_ctx *ctx, const char *app_name)
     /* create profile directory if it does not exist */
     if (!_directory_exists(ctx->profile_path.c_str())) {
         if(!_make_directory(ctx->profile_path.c_str())) {
-            fprintf(stderr, "error: _make_directory failed: %s\n",
+            _panic("error: _make_directory failed: %s\n",
                 ctx->profile_path.c_str());
         }
     }
