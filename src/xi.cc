@@ -216,7 +216,7 @@ static void lowercase_terms(vector<string> &terms)
  * unicode data search - using linear scan
  */
 
-static vector<unicode_data> do_search_brute_force(vector<unicode_data> &data,
+static vector<unicode_data> xi_search_brute_force(vector<unicode_data> &data,
     vector<vector<string>> &tokens, vector<string> terms)
 {
     lowercase_terms(terms);
@@ -253,7 +253,7 @@ static vector<unicode_data> do_search_brute_force(vector<unicode_data> &data,
     return results;
 }
 
-static vector<unicode_data> do_search_brute_force(vector<string> terms)
+static vector<unicode_data> xi_search_brute_force(vector<string> terms)
 {
     /*
      * load and tokenize unicode data
@@ -267,7 +267,7 @@ static vector<unicode_data> do_search_brute_force(vector<string> terms)
      * perform search
      */
     const auto t2 = high_resolution_clock::now();
-    vector<unicode_data> results = do_search_brute_force(data, tokens, terms);
+    vector<unicode_data> results = xi_search_brute_force(data, tokens, terms);
     const auto t3 = high_resolution_clock::now();
 
     /*
@@ -288,7 +288,7 @@ static vector<unicode_data> do_search_brute_force(vector<string> terms)
  * unicode data search - using rolling hash index
  */
 
-static vector<unicode_data> do_search_rabin_karp(vector<unicode_data> &data,
+static vector<unicode_data> xi_search_rabin_karp(vector<unicode_data> &data,
     vector<vector<string>> &tokens, subhash_map &index, vector<string> terms)
 {
     lowercase_terms(terms);
@@ -358,7 +358,7 @@ static vector<unicode_data> do_search_rabin_karp(vector<unicode_data> &data,
     return results;
 }
 
-static vector<unicode_data> do_search_rabin_karp(vector<string> terms)
+static vector<unicode_data> xi_search_rabin_karp(vector<string> terms)
 {
     /*
      * load, tokenize and index unicode data
@@ -374,7 +374,7 @@ static vector<unicode_data> do_search_rabin_karp(vector<string> terms)
      * perform search
      */
     const auto t2 = high_resolution_clock::now();
-    vector<unicode_data> results = do_search_rabin_karp(data, tokens, index, terms);
+    vector<unicode_data> results = xi_search_rabin_karp(data, tokens, index, terms);
     const auto t3 = high_resolution_clock::now();
 
     /*
@@ -406,7 +406,7 @@ int64_t parse_value(const char* valstr)
     return val;
 }
 
-static vector<unicode_data> do_codepoint_lookup(string term)
+static vector<unicode_data> xi_codepoint_lookup(string term)
 {
     /*
      * load unicode data
@@ -428,7 +428,7 @@ static vector<unicode_data> do_codepoint_lookup(string term)
     return results;
 }
 
-void do_print_results(vector<unicode_data> data)
+void xi_print_results(vector<unicode_data> data)
 {
 #if defined OS_WINDOWS
     SetConsoleOutputCP(CP_UTF8);
@@ -660,7 +660,7 @@ static void xi_client_connect_cb(xi_nub_ch *nch, xi_nub_error err)
     xi_nub_io_write(nch, out.data, out.length, xi_client_request_write_cb);
 }
 
-static void do_nub_client()
+static void xi_nub_client()
 {
     xi_nub_ctx *ctx = xi_nub_ctx_create("Xi");
 
@@ -793,9 +793,9 @@ static void xi_server_request_read_cb(xi_nub_ch *nch, xi_nub_error err,
     vector<unicode_data> r;
     const auto t1 = high_resolution_clock::now();
     if (optimized_search) {
-        r = do_search_rabin_karp(state->data, state->tokens, state->index, terms);
+        r = xi_search_rabin_karp(state->data, state->tokens, state->index, terms);
     } else {
-        r = do_search_brute_force(state->data, state->tokens, terms);
+        r = xi_search_brute_force(state->data, state->tokens, terms);
     }
     const auto t2 = high_resolution_clock::now();
     auto ts = duration_cast<nanoseconds>(t2 - t1).count();
@@ -866,13 +866,12 @@ static void xi_server_accept_cb(xi_nub_ch *nch, xi_nub_error err)
     xi_nub_io_read(nch, in.data, in.length, xi_server_request_read_cb);
 }
 
-static void do_nub_server()
+static void xi_nub_server()
 {
     xi_nub_ctx *ctx = xi_nub_ctx_create("Xi");
 
     _debug_func("profile_path = \"%s\";\n", xi_nub_ctx_get_profile_path(ctx));
 
-    /* start server */
     const char* args[] = { "<self>", "nub-server" };
     xi_nub_agent *agent = xi_nub_agent_new(ctx, 2, args);
     xi_nub_agent_accept(agent, 8, xi_server_accept_cb);
@@ -885,12 +884,12 @@ static void do_nub_server()
  * stand alone client
  */
 
-static void do_standalone_client()
+static void xi_standalone_client()
 {
     if (optimized_search) {
-        do_print_results(do_search_rabin_karp(unicode_search_terms));
+        xi_print_results(xi_search_rabin_karp(unicode_search_terms));
     } else {
-        do_print_results(do_search_brute_force(unicode_search_terms));
+        xi_print_results(xi_search_brute_force(unicode_search_terms));
     }
 }
 
@@ -1027,16 +1026,16 @@ int main(int argc, char **argv)
 
     if (unicode_search_terms.size()) {
         if (standalone_search) {
-            do_standalone_client();
+            xi_standalone_client();
         } else {
-            do_nub_client();
+            xi_nub_client();
         }
     }
     if (unicode_numeric_term.size()) {
-        do_print_results(do_codepoint_lookup(unicode_numeric_term));
+        xi_print_results(xi_codepoint_lookup(unicode_numeric_term));
     }
 
     if (nub_server) {
-        do_nub_server();
+        xi_nub_server();
     }
 }
