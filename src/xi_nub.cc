@@ -306,7 +306,6 @@ static void xi_nub_sleep_on_ticket(xi_nub_ctx *ctx, xi_nub_ticket ticket)
     _semaphore_wait(&sem, 15000);
 
 #if defined OS_WINDOWS
-    /* FIXME - add wait to avoid ERROR_PIPE_CONNECTED */
     _thread_sleep(100);
 #endif
 
