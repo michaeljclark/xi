@@ -2,8 +2,6 @@
 
 _Xi_ (aka ξ), a search tool for the Unicode Character Database.
 
-![xi](/images/xi.png)
-
 ## Usage Instructions
 
 _Xi_ `unicode` subcommand indicates a search against the Unicode
