@@ -68,7 +68,7 @@ _Xi_ supports a concept called _nubs_ which are session activation and
 peer communication stubs. _Nubs_ allow an agent to create a session peer
 process with a different lifecycle to its own, hence the name _nub_.
 
-> cross-platform session peer process activation stubs
+> cross-platform session peer activation stubs
 
 Nubs eliminate the need to configure environment variables or modify
 operating system launchers like _systemd_, _launchd_ and _services_.
