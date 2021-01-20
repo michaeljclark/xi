@@ -67,34 +67,17 @@ a subset of all query terms.
 ## Nubs
 
 _Xi_ supports a concept called _nubs_ which are session activation and
-communication stubs. _Nubs_ allow an agent to create a session peer
+peer communication stubs. _Nubs_ allow an agent to create a session peer
 process with a different lifecycle to its own, hence the name _nub_.
-Nubs allow splitting the app into a command-line agent and session
-peer containing some cache, with the session peer process automatically
-started by the command-line tool. Subsequent invocations of the tool will
-connect to a previously created peer.
 
-## Nub addresses
+> cross-platform session peer process activation stubs
 
-Nub addresses are composed using a SHA-256 hash of the components of
-the argument vector including the terminating zero of each C string.
-`<self>` is substituted for the executable name. The SHA-256 hash is
-computed after any substitutions so that unique binary images have
-unique addresses.
-
-The following initialization code:
-
-```
-const char* args[] = { "<self>", "nub-server" };
-xi_nub_server *c = xi_nub_server_new(ctx, 2, args);
-```
-
-Results in the following nub addresses:
-
-|operating system|example nub address|
-|---|---|
-|Windows pipe|`\\.\pipe\Xi-1345c60535958c16a94dbbde8dfdbf86b260670a9afb9ca1b9de4747ae309234`|
-|UNIX socket|`@Xi-e21c0ba1c40d379e35292716e290aa6761184e9fba5f30b274636d51b15a2688`|
+Nubs eliminate the need to configure environment variables or modify
+operating system launchers like _systemd_, _launchd_ and _services_.
+Nubs allow splitting an app into a command-line agent and a separate
+session peer process, with the session peer started by the command-line
+tool. Subsequent invocations of the command-line tool will connect to a
+previously created peer process.
 
 ### Xi Unicode Nub
 
@@ -118,6 +101,28 @@ xi -t unicode blue
 🫐	U+1fad0	BLUEBERRIES
 [nub-agent] search = 254μs
 ```
+
+### Nub addresses
+
+Nub addresses are composed using a SHA-256 hash of the components of
+the argument vector including the terminating zero of each C string.
+`<self>` is substituted for the executable name. The SHA-256 hash is
+computed after any substitutions so that unique binary images have
+unique addresses.
+
+The following initialization code:
+
+```
+const char* args[] = { "<self>", "nub-server" };
+xi_nub_server *c = xi_nub_server_new(ctx, 2, args);
+```
+
+Results in the following nub addresses:
+
+|operating system|example nub address|
+|---|---|
+|Windows pipe|`\\.\pipe\Xi-1345c60535958c16a94dbbde8dfdbf86b260670a9afb9ca1b9de4747ae309234`|
+|UNIX socket|`@Xi-e21c0ba1c40d379e35292716e290aa6761184e9fba5f30b274636d51b15a2688`|
 
 ### Nub Locking
 
