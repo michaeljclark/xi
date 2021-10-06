@@ -49,7 +49,7 @@ template <typename T> using vector = std::vector<T>;
 template <typename K,typename V> using pair = std::pair<K,V>;
 template <typename K,typename V> using map = std::map<K,V>;
 
-static const char* unicode_data_file = "data/13.0.0/UnicodeData.txt";
+static const char* unicode_data_file = "data/14.0.0/UnicodeData.txt";
 static bool help_text = false;
 static bool standalone_search = false;
 static bool nub_server = false;
