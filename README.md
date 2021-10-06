@@ -130,3 +130,11 @@ is no answer they will create a semaphore, writing its id to a file,
 a leader will be chosen to fork the nub child process and all agents
 will then wait on their semaphore. When the server has started, it will
 read the list of semaphores and signal them, waking up all of the agents.
+
+## Licenses
+
+_Xi_ is released under the ISC license. The Unicode Character Database, in
+particular the [UnicodeData.txt](data/14.0.0/UnicodeData.txt) file are licensed
+under these [terms of use](https://www.unicode.org/terms_of_use.html). © 2021
+Unicode®, Inc. Unicode and the Unicode Logo are registered trademarks of
+Unicode, Inc. in the U.S. and other countries.
