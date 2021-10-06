@@ -562,6 +562,8 @@ static void xi_client_close_cb(xi_nub_ch *nch, xi_nub_error err)
     }
 
     _debug_mark();
+
+    delete ch;
 }
 
 static void xi_client_request_write_cb(xi_nub_ch *nch, xi_nub_error err,
@@ -711,6 +713,8 @@ static void xi_server_close_cb(xi_nub_ch *nch, xi_nub_error err)
     }
 
     _debug_mark();
+
+    delete ch;
 }
 
 static void xi_server_request_read_cb(xi_nub_ch *nch, xi_nub_error err,
