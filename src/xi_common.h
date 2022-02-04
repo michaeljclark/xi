@@ -572,14 +572,10 @@ static string _executable_path()
 #if defined OS_MACOS
 static string _executable_path()
 {
-    uint32_t sz;
-    string path;
-
-    assert(_NSGetExecutablePath(NULL, &sz) == -1);
-    path.resize(sz);
-    assert(_NSGetExecutablePath(path.data(), &sz) == 0);
-
-    return path;
+    char path[MAXPATHLEN];
+    uint32_t sz = sizeof(path);
+    _NSGetExecutablePath(path, &sz);
+    return string(path);
 }
 #endif
 
