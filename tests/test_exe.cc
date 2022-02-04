@@ -9,6 +9,8 @@
 
 #include "xi_common.h"
 
+bool _debug_enabled;
+
 void test_executable_path()
 {
 	std::string path = _executable_path();

@@ -10,6 +10,8 @@
 #include "xi_nub.h"
 #include "xi_common.h"
 
+bool _debug_enabled;
+
 void test_lock(xi_nub_ctx *ctx)
 {
     char sem_file[MAXPATHLEN];

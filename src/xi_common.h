@@ -152,7 +152,7 @@ static void _panic(const char *fmt, ...)
     exit(9);
 }
 
-static bool _debug_enabled = false;
+extern bool _debug_enabled;
 
 #define _debug(...) if (_debug_enabled) { printf(__VA_ARGS__); }
 #define _debug_func(fmt,...) if (_debug_enabled) { printf("%s: " fmt, __func__, __VA_ARGS__); }
