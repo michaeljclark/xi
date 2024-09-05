@@ -18,6 +18,7 @@
 
 #include <cstdio>
 #include <cstddef>
+#include <cstdint>
 #include <csignal>
 #include <cstdarg>
 #include <cerrno>
