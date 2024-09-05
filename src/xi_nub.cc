@@ -231,8 +231,6 @@ void xi_nub_agent_accept(xi_nub_agent *agent, int nthreads, xi_nub_accept_cb cb)
 
     xi_nub_wake_all_waiters(agent->ctx);
 
-    /* TODO: create agent thread */
-
     for (;;) {
         xi_nub_ch ch{
             agent->ctx, agent, _listen_socket_accept(agent->listen_sock)
@@ -245,8 +243,6 @@ void xi_nub_agent_accept(xi_nub_agent *agent, int nthreads, xi_nub_accept_cb cb)
         } else {
             cb(&ch, xi_nub_success);
         }
-
-        /* TODO - implement server shutdown */
     }
 }
 
@@ -321,8 +317,6 @@ void xi_nub_agent_connect(xi_nub_agent *agent, int nthreads, xi_nub_connect_cb c
     };
 
     _debug_func("sock=%s\n", ch.sock.identity());
-
-    /* TODO: create agent thread */
 
     /* if we get a socket error, we try to launch a new server */
     if (ch.sock.has_error())
